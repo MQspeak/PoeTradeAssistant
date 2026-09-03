@@ -1,0 +1,25 @@
+# Visual Studio / .NET build state
+.vs/
+**/bin/
+**/obj/
+TestResults/
+*.user
+*.suo
+
+# Front-end dependencies and generated output (legacy calculator reference)
+web/calculator/node_modules/
+web/calculator/dist/
+web/calculator/*.tsbuildinfo
+
+# Packaging and runtime caches
+artifacts/
+
+# Runtime-generated scanner/calculator data
+output/
+profiles/
+ocr-debug/
+
+# Local operating-system files
+Thumbs.db
+.DS_Store
+

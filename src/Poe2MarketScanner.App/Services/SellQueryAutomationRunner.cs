@@ -1,0 +1,348 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Poe2MarketScanner.Core.Automation;
+using Poe2MarketScanner.Core.Configuration;
+
+namespace Poe2MarketScanner.App.Services;
+
+public sealed class SellQueryAutomationRunner
+{
+    private const int MaxOcrAttempts = 8;
+
+    private readonly IInputAutomationRunner _inputRunner;
+    private readonly ISellQueryOcrReader _ocrReader;
+    private readonly IQueryResultWriter _resultWriter;
+    private readonly Func<DateTimeOffset> _now;
+
+    public SellQueryAutomationRunner(
+        IInputAutomationRunner inputRunner,
+        ISellQueryOcrReader ocrReader,
+        IQueryResultWriter resultWriter,
+        Func<DateTimeOffset>? now = null)
+    {
+        _inputRunner = inputRunner;
+        _ocrReader = ocrReader;
+        _resultWriter = resultWriter;
+        _now = now ?? (() => DateTimeOffset.Now);
+    }
+
+    public async Task<SellQueryBatchResult> RunAsync(AppProfile profile, CancellationToken cancellationToken)
+    {
+        var queryItems = profile.QueryList.Items
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .ToList();
+
+        if (queryItems.Count == 0)
+        {
+            throw new InvalidOperationException("No query items are available for automation.");
+        }
+
+        var baseMode = TradeModeCatalog.Resolve(profile.SelectedTradeModeKey);
+        var mode = CreateEffectiveMode(baseMode, profile.UseTraditionalChinese);
+        var result = new SellQueryBatchResult
+        {
+            Mode = mode.Key,
+            StartedAt = _now()
+        };
+
+        foreach (var currencyName in queryItems)
+        {
+            result.Items.Add(new SellQueryItemResult
+            {
+                CurrencyName = currencyName,
+                BuyCurrencyName = mode.BuyCurrencyName,
+                SellCurrencyName = mode.SellCurrencyName,
+                Status = "pending",
+                CapturedAt = _now()
+            });
+        }
+
+        await CaptureCurrentPairRatioAsync(profile, mode, result, cancellationToken);
+        await PrimeBuySideAsync(profile, mode, cancellationToken);
+        foreach (var item in result.Items)
+        {
+            await CaptureBuyAsync(profile, item, cancellationToken);
+        }
+
+        await PrimeSellSideAsync(profile, mode, cancellationToken);
+        foreach (var item in result.Items)
+        {
+            await CaptureSellAsync(profile, item, cancellationToken);
+        }
+
+        result.FinishedAt = _now();
+        result.OutputPath = _resultWriter.WriteSellQueryBatch(result);
+        return result;
+    }
+
+    private async Task CaptureCurrentPairRatioAsync(
+        AppProfile profile,
+        TradeModeDefinition mode,
+        SellQueryBatchResult result,
+        CancellationToken cancellationToken)
+    {
+        await PrimeCurrencySideAsync(profile, "rightCurrency", mode.BuyCurrencyName, cancellationToken);
+        await PrimeCurrencySideAsync(profile, "leftCurrency", mode.SellCurrencyName, cancellationToken);
+        await SetQuantityAsync(profile, "leftInput", cancellationToken);
+
+        var readResult = await ReadUntilStableAsync(profile, cancellationToken);
+        foreach (var item in result.Items)
+        {
+            item.CurrentPairRatioRaw = readResult.RatioRaw;
+            item.CurrentPairRatioNormalized = readResult.RatioNormalized;
+            if (!string.Equals(readResult.Status, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Status = readResult.Status;
+                item.ErrorMessage = readResult.ErrorMessage;
+            }
+        }
+    }
+
+    private Task PrimeBuySideAsync(AppProfile profile, TradeModeDefinition mode, CancellationToken cancellationToken)
+    {
+        return PrimeCurrencySideAsync(profile, "rightCurrency", mode.BuyCurrencyName, cancellationToken);
+    }
+
+    private Task PrimeSellSideAsync(AppProfile profile, TradeModeDefinition mode, CancellationToken cancellationToken)
+    {
+        return PrimeCurrencySideAsync(profile, "rightCurrency", mode.SellCurrencyName, cancellationToken);
+    }
+
+    private async Task PrimeCurrencySideAsync(
+        AppProfile profile,
+        string currencyAnchorKey,
+        string currencyName,
+        CancellationToken cancellationToken)
+    {
+        await ClickAnchorAsync(profile, currencyAnchorKey, cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+        await ClickAnchorAsync(profile, "allTab", cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+        await EnterSearchTextAsync(profile, currencyName, cancellationToken);
+        await ClickAnchorAsync(profile, "searchTarget", cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs * 2, profile, cancellationToken);
+    }
+
+    private async Task CaptureBuyAsync(AppProfile profile, SellQueryItemResult item, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SearchCurrencyAsync(profile, "leftCurrency", item.CurrencyName, cancellationToken);
+            await SetQuantityAsync(profile, "leftInput", cancellationToken);
+            SellQueryOcrResult goldReadResult;
+            if (profile.Automation.RecognizeGoldCost)
+            {
+                goldReadResult = await ReadUntilStableAsync(profile, cancellationToken);
+                item.GoldCostRaw = goldReadResult.GoldCostRaw;
+                item.GoldCostNormalized = goldReadResult.GoldCostNormalized;
+            }
+            else
+            {
+                goldReadResult = new SellQueryOcrResult
+                {
+                    Status = "ok"
+                };
+                item.GoldCostRaw = string.Empty;
+                item.GoldCostNormalized = string.Empty;
+            }
+
+            await CtrlClickAnchorAsync(profile, "leftCurrency", cancellationToken);
+            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+            await ClickAnchorAsync(profile, "idle", cancellationToken);
+            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+            var ratioReadResult = await ReadUntilStableAsync(profile, cancellationToken);
+            await CtrlClickAnchorAsync(profile, "leftCurrency", cancellationToken);
+            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+
+            item.BuyRatioRaw = ratioReadResult.RatioRaw;
+            item.BuyRatioNormalized = ratioReadResult.RatioNormalized;
+            item.CapturedAt = _now();
+            item.Status = string.Equals(goldReadResult.Status, "ok", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(ratioReadResult.Status, "ok", StringComparison.OrdinalIgnoreCase)
+                ? "ok"
+                : !string.Equals(goldReadResult.Status, "ok", StringComparison.OrdinalIgnoreCase)
+                    ? goldReadResult.Status
+                    : ratioReadResult.Status;
+            item.ErrorMessage = !string.IsNullOrWhiteSpace(goldReadResult.ErrorMessage)
+                ? goldReadResult.ErrorMessage
+                : ratioReadResult.ErrorMessage;
+        }
+        catch (Exception exception)
+        {
+            item.Status = "failed";
+            item.ErrorMessage = exception.Message;
+            item.CapturedAt = _now();
+        }
+    }
+
+    private async Task CaptureSellAsync(AppProfile profile, SellQueryItemResult item, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SearchCurrencyAsync(profile, "leftCurrency", item.CurrencyName, cancellationToken);
+            await SetQuantityAsync(profile, "leftInput", cancellationToken);
+            var readResult = await ReadUntilStableAsync(profile, cancellationToken);
+
+            item.SellRatioRaw = readResult.RatioRaw;
+            item.SellRatioNormalized = readResult.RatioNormalized;
+            item.CapturedAt = _now();
+
+            if (!string.Equals(readResult.Status, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Status = readResult.Status;
+                item.ErrorMessage = readResult.ErrorMessage;
+                return;
+            }
+
+            if (!string.Equals(item.Status, "ok", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(item.Status, "pending", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            item.Status = "ok";
+            item.ErrorMessage = null;
+        }
+        catch (Exception exception)
+        {
+            item.Status = "failed";
+            item.ErrorMessage = exception.Message;
+            item.CapturedAt = _now();
+        }
+    }
+
+    private async Task SearchCurrencyAsync(
+        AppProfile profile,
+        string currencyAnchorKey,
+        string currencyName,
+        CancellationToken cancellationToken)
+    {
+        await ClickAnchorAsync(profile, currencyAnchorKey, cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+        await ClickAnchorAsync(profile, "allTab", cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+        await EnterSearchTextAsync(profile, currencyName, cancellationToken);
+        await ClickAnchorAsync(profile, "searchTarget", cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs * 2, profile, cancellationToken);
+    }
+
+    private async Task EnterSearchTextAsync(AppProfile profile, string text, CancellationToken cancellationToken)
+    {
+        await ClickAnchorAsync(profile, "search", cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.InputDelayMs, profile, cancellationToken);
+        await _inputRunner.SendSelectAllAsync(cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.InputDelayMs, profile, cancellationToken);
+        await _inputRunner.SendBackspaceAsync(cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.InputDelayMs, profile, cancellationToken);
+        await _inputRunner.PasteTextAsync(text, cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.InputDelayMs, profile, cancellationToken);
+    }
+
+    private async Task SetQuantityAsync(AppProfile profile, string inputAnchorKey, CancellationToken cancellationToken)
+    {
+        await ClickAnchorAsync(profile, inputAnchorKey, cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+        await _inputRunner.SendSelectAllAsync(cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.InputDelayMs, profile, cancellationToken);
+        await _inputRunner.SendBackspaceAsync(cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.InputDelayMs, profile, cancellationToken);
+        await _inputRunner.PasteTextAsync("1", cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.InputDelayMs, profile, cancellationToken);
+        await ClickAnchorAsync(profile, "idle", cancellationToken);
+        await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+    }
+
+    private async Task<SellQueryOcrResult> ReadUntilStableAsync(AppProfile profile, CancellationToken cancellationToken)
+    {
+        SellQueryOcrResult? lastResult = null;
+
+        for (var attempt = 0; attempt < MaxOcrAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                lastResult = _ocrReader.Read(profile);
+            }
+            catch (Exception exception)
+            {
+                lastResult = new SellQueryOcrResult
+                {
+                    Status = "read_failed",
+                    ErrorMessage = exception.Message
+                };
+            }
+
+            if (string.Equals(lastResult.Status, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                return lastResult;
+            }
+
+            await _inputRunner.WaitAsync(Math.Max(200, profile.Automation.InputDelayMs), cancellationToken);
+        }
+
+        if (lastResult is not null)
+        {
+            return new SellQueryOcrResult
+            {
+                GoldCostRaw = lastResult.GoldCostRaw,
+                GoldCostNormalized = lastResult.GoldCostNormalized,
+                RatioRaw = lastResult.RatioRaw,
+                RatioNormalized = lastResult.RatioNormalized,
+                Status = lastResult.Status,
+                ErrorMessage = string.IsNullOrWhiteSpace(lastResult.ErrorMessage)
+                    ? "ocr_timeout"
+                    : $"{lastResult.ErrorMessage}; timeout=ocr"
+            };
+        }
+
+        return new SellQueryOcrResult
+        {
+            Status = "failed",
+            ErrorMessage = "ocr_timeout"
+        };
+    }
+
+    private Task WaitAfterActionAsync(int operationDelayMs, AppProfile profile, CancellationToken cancellationToken)
+    {
+        var totalDelay = Math.Max(0, profile.Automation.CommonDelayMs) + Math.Max(0, operationDelayMs);
+        return _inputRunner.WaitAsync(totalDelay, cancellationToken);
+    }
+
+    private Task ClickAnchorAsync(AppProfile profile, string anchorKey, CancellationToken cancellationToken)
+    {
+        if (!profile.Anchors.TryGetValue(anchorKey, out var anchor))
+        {
+            throw new InvalidOperationException($"Missing anchor configuration: {anchorKey}");
+        }
+
+        return _inputRunner.ClickAsync(anchor.X, anchor.Y, cancellationToken);
+    }
+
+    private Task CtrlClickAnchorAsync(AppProfile profile, string anchorKey, CancellationToken cancellationToken)
+    {
+        if (!profile.Anchors.TryGetValue(anchorKey, out var anchor))
+        {
+            throw new InvalidOperationException($"Missing anchor configuration: {anchorKey}");
+        }
+
+        return _inputRunner.CtrlClickAsync(anchor.X, anchor.Y, cancellationToken);
+    }
+
+    private static TradeModeDefinition CreateEffectiveMode(TradeModeDefinition mode, bool useTraditionalChinese)
+    {
+        if (!useTraditionalChinese)
+        {
+            return mode;
+        }
+
+        return new TradeModeDefinition
+        {
+            Key = mode.Key,
+            DisplayName = TradeModeCatalog.LocalizeTradeModeDisplayName(mode, true),
+            BuyCurrencyName = TradeModeCatalog.LocalizeCurrencyName(mode.BuyCurrencyName, true),
+            SellCurrencyName = TradeModeCatalog.LocalizeCurrencyName(mode.SellCurrencyName, true)
+        };
+    }
+}

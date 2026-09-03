@@ -1,0 +1,3085 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POE2 套利工具</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #100b09;
+        --bg-soft: #1b1310;
+        --panel: rgba(28, 22, 18, 0.96);
+        --panel-soft: rgba(40, 31, 24, 0.96);
+        --line: rgba(185, 142, 79, 0.28);
+        --line-strong: rgba(224, 173, 91, 0.42);
+        --ink: #f0dfc1;
+        --muted: #b39d7d;
+        --good: #7fd48d;
+        --bad: #e07e67;
+        --warn: #f0c36b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: "Segoe UI", "PingFang SC", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top, rgba(215, 163, 77, 0.12), transparent 24%),
+          linear-gradient(180deg, rgba(130, 37, 29, 0.18), transparent 240px),
+          linear-gradient(145deg, var(--bg) 0%, #140f0d 46%, var(--bg-soft) 100%);
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      .app-shell {
+        max-width: 1380px;
+        margin: 0 auto;
+        padding: 18px 14px 36px;
+      }
+
+      .hero-card,
+      .panel,
+      .summary-card {
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background:
+          radial-gradient(circle at top right, rgba(224, 173, 91, 0.08), transparent 24%),
+          linear-gradient(180deg, var(--panel-soft), var(--panel));
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      }
+
+      .hero-card {
+        padding: 18px 20px;
+      }
+
+      .game-switcher {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+        padding: 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 14px;
+        background: rgba(11, 9, 8, 0.78);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+      }
+
+      .game-switch-button {
+        min-width: 0;
+        padding: 13px 16px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--muted);
+        background: rgba(16, 12, 10, 0.88);
+        cursor: pointer;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+
+      .game-switch-button.active {
+        color: var(--ink);
+        border-color: rgba(224, 173, 91, 0.72);
+        background:
+          linear-gradient(180deg, rgba(182, 69, 53, 0.96), rgba(106, 31, 24, 0.98)),
+          radial-gradient(circle at top, rgba(224, 173, 91, 0.18), transparent 60%);
+        box-shadow: inset 0 0 0 1px rgba(240, 207, 147, 0.12);
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #d3ab67;
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      .hero-title {
+        font-size: clamp(1.7rem, 3vw, 2.5rem);
+      }
+
+      .hero-copy {
+        margin-top: 10px;
+        color: var(--muted);
+        line-height: 1.7;
+        max-width: 920px;
+      }
+
+      .tab-bar {
+        margin-top: 16px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .tab-button,
+      .ghost-button,
+      .danger-button,
+      .primary-button {
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        padding: 10px 14px;
+        background: rgba(16, 12, 10, 0.88);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .tab-button.active,
+      .primary-button {
+        background:
+          linear-gradient(180deg, rgba(182, 69, 53, 0.96), rgba(106, 31, 24, 0.98)),
+          radial-gradient(circle at top, rgba(224, 173, 91, 0.18), transparent 60%);
+        border-color: rgba(224, 173, 91, 0.5);
+      }
+
+      .danger-button {
+        color: var(--bad);
+        border-color: rgba(224, 126, 103, 0.3);
+      }
+
+      .page {
+        margin-top: 16px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .panel {
+        padding: 16px;
+        min-width: 0;
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .panel-copy {
+        margin-top: 8px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .control-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field-label {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      input,
+      select {
+        width: 100%;
+        min-width: 0;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: rgba(11, 9, 8, 0.9);
+        color: var(--ink);
+        padding: 10px 12px;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .summary-card {
+        padding: 14px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .summary-card .label {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .summary-card .value {
+        font-size: 1.3rem;
+        font-weight: 700;
+      }
+
+      .summary-card .hint {
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 0.88rem;
+      }
+
+      .summary-card.good {
+        border-color: rgba(127, 212, 141, 0.4);
+      }
+
+      .summary-card.warn {
+        border-color: rgba(240, 195, 107, 0.4);
+      }
+
+      .summary-card.bad {
+        border-color: rgba(224, 126, 103, 0.4);
+      }
+
+      .empty-state {
+        padding: 18px;
+        border-radius: 12px;
+        border: 1px dashed var(--line);
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        min-width: 1020px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 10px 8px;
+        border-bottom: 1px solid rgba(224, 173, 91, 0.12);
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      th {
+        font-size: 0.8rem;
+        color: #f0cf93;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      td .cell-stack {
+        display: grid;
+        gap: 6px;
+      }
+
+      .inline-input {
+        min-width: 120px;
+      }
+
+      .target-name-input {
+        min-width: 180px;
+      }
+
+      .roi-positive {
+        color: var(--good);
+        font-weight: 700;
+      }
+
+      .roi-negative {
+        color: var(--bad);
+        font-weight: 700;
+      }
+
+      .roi-neutral {
+        color: var(--warn);
+        font-weight: 700;
+      }
+
+      .hint-text {
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 0.88rem;
+      }
+
+      .action-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .drag-cell {
+        width: 68px;
+      }
+
+      .drag-handle-button {
+        width: 40px;
+        min-width: 40px;
+        padding: 8px 0;
+        border-radius: 10px;
+        border: 1px dashed var(--line-strong);
+        background: rgba(11, 9, 8, 0.72);
+        color: var(--muted);
+        cursor: grab;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+
+      .drag-handle-button:active {
+        cursor: grabbing;
+      }
+
+      .target-row.is-dragging {
+        opacity: 0.45;
+      }
+
+      .target-row.is-drag-over-before td {
+        border-top: 2px solid rgba(127, 212, 141, 0.9);
+      }
+
+      .target-row.is-drag-over-after td {
+        border-bottom: 2px solid rgba(127, 212, 141, 0.9);
+      }
+
+      .formula-topbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 280px) 1fr auto;
+        gap: 18px;
+        align-items: center;
+      }
+
+      .formula-workspace {
+        display: grid;
+        gap: 16px;
+      }
+
+      .formula-name-input {
+        min-height: 56px;
+        font-size: 1rem;
+      }
+
+      .formula-metrics {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .formula-metric-inline {
+        font-size: 1rem;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+
+      .formula-metric-inline strong {
+        font-size: 1.15rem;
+      }
+
+      .formula-zone {
+        padding: 18px 20px 20px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: rgba(190, 190, 190, 0.12);
+      }
+
+      .formula-zone-title {
+        margin: 0 0 14px;
+        text-align: center;
+        font-size: 1.1rem;
+      }
+
+      .formula-card-row {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-items: stretch;
+      }
+
+      .formula-item-card {
+        position: relative;
+        width: 180px;
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background:
+          radial-gradient(circle at top right, rgba(224, 173, 91, 0.08), transparent 24%),
+          linear-gradient(180deg, var(--panel-soft), var(--panel));
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
+        display: grid;
+        gap: 10px;
+      }
+
+      .formula-item-card input,
+      .formula-item-card select {
+        padding: 8px 10px;
+        border-radius: 10px;
+      }
+
+      .formula-field-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 58px;
+        gap: 4px;
+      }
+
+      .formula-inline-row {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+      }
+
+      .formula-compact-label {
+        font-size: 0.78rem;
+        color: var(--ink);
+        line-height: 1.2;
+      }
+
+      .formula-inline-hint {
+        font-size: 0.72rem;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      .formula-add-tile {
+        width: 180px;
+        min-height: 222px;
+        border: 2px dashed rgba(255, 125, 125, 0.7);
+        border-radius: 14px;
+        background:
+          linear-gradient(180deg, rgba(255, 125, 125, 0.08), rgba(255, 125, 125, 0.03)),
+          rgba(11, 9, 8, 0.35);
+        color: #ff7d7d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        line-height: 1;
+      }
+
+      .formula-add-tile:hover {
+        background: rgba(255, 125, 125, 0.12);
+      }
+
+      .formula-card-delete {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 999px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
+      }
+
+      .formula-item-card:hover .formula-card-delete,
+      .formula-item-card:focus-within .formula-card-delete {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .hidden,
+      .page.hidden {
+        display: none;
+      }
+
+      @media (max-width: 980px) {
+        .summary-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .app-shell {
+          padding: 12px 10px 24px;
+        }
+
+        .panel-head,
+        .control-row,
+        .action-row {
+          align-items: stretch;
+        }
+
+        .tab-button,
+        .ghost-button,
+        .danger-button,
+        .primary-button {
+          width: 100%;
+        }
+
+        .formula-topbar {
+          grid-template-columns: 1fr;
+        }
+
+        .formula-metrics {
+          gap: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="app-shell"></div>
+
+    <script>
+      const LEGACY_STORAGE_KEY = "poe2-arbitrage-tool-standalone-v3";
+      const STORAGE_KEY = "poe-arbitrage-tool-standalone-v4";
+      const GAME_IDS = ["poe1", "poe2"];
+      const SCANNER_CURRENCY_ALIASES = {
+        "混沌石": "C",
+        "神聖石": "D",
+        "神圣石": "D",
+        "崇高石": "E",
+        "Chaos Orb": "C",
+        "Divine Orb": "D",
+        "Exalted Orb": "E",
+        "C": "C",
+        "D": "D",
+        "E": "E"
+      };
+
+      function createId(prefix) {
+        return prefix + "-" + Math.random().toString(36).slice(2, 10);
+      }
+
+      function parsePositiveNumber(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      }
+
+      function parseTradeValue(value, options = {}) {
+        const text = String(value || "").trim();
+        if (!text) {
+          return null;
+        }
+
+        if (options.allowRatio && text.includes("/")) {
+          const parts = text.split("/").map((part) => part.trim());
+          if (parts.length !== 2) {
+            return null;
+          }
+
+          const itemCount = Number(parts[0]);
+          const currencyCount = Number(parts[1]);
+          if (!Number.isFinite(itemCount) || !Number.isFinite(currencyCount) || itemCount <= 0 || currencyCount <= 0) {
+            return null;
+          }
+
+          return currencyCount / itemCount;
+        }
+
+        return parsePositiveNumber(text);
+      }
+
+      function parseNonNegativeNumber(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+      }
+
+      function formatNumber(value, digits = 4) {
+        if (!Number.isFinite(value)) {
+          return "--";
+        }
+
+        return new Intl.NumberFormat("zh-CN", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: digits
+        }).format(value);
+      }
+
+      function formatPercent(value) {
+        if (!Number.isFinite(value)) {
+          return "--";
+        }
+
+        return (value > 0 ? "+" : "") + formatNumber(value, 2) + "%";
+      }
+
+      function formatGoldCompact(value) {
+        if (!Number.isFinite(value)) {
+          return "--";
+        }
+
+        if (Math.abs(value) >= 10000) {
+          return formatNumber(value / 10000, 1) + "万";
+        }
+
+        return formatNumber(value, 2);
+      }
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function createEmptyItem() {
+        return {
+          id: createId("item"),
+          name: "",
+          category: "currency",
+          goldCost: "0"
+        };
+      }
+
+      function createEmptyTarget() {
+        return {
+          id: createId("target"),
+          itemId: "",
+          rates: {}
+        };
+      }
+
+      function createEmptyPair() {
+        return {
+          id: createId("pair"),
+          baseItemId: "",
+          quoteItemId: "",
+          rate: ""
+        };
+      }
+
+      function createEmptyRuneTarget() {
+        return {
+          id: createId("rune"),
+          runeName: "",
+          smallPrice: "",
+          smallCurrencyId: "",
+          smallGoldCost: "",
+          perfectPrice: "",
+          perfectCurrencyId: ""
+        };
+      }
+
+      function createEmptyFormulaEntry() {
+        return {
+          id: createId("formula-entry"),
+          label: "",
+          currencyId: "",
+          unitPrice: "",
+          goldCostPerUnit: "",
+          quantity: "1"
+        };
+      }
+
+      function createDefaultFormulaDraft() {
+        return {
+          editingFormulaId: "",
+          name: "",
+          costItems: [createEmptyFormulaEntry()],
+          revenueItems: [createEmptyFormulaEntry()]
+        };
+      }
+
+      function createDefaultFormulaArbitrageState() {
+        return {
+          draft: createDefaultFormulaDraft(),
+          formulas: []
+        };
+      }
+
+      function normalizeFormulaEntry(entry) {
+        return {
+          id: entry && entry.id ? entry.id : createId("formula-entry"),
+          label: entry && typeof entry.label === "string" ? entry.label : "",
+          currencyId: entry && typeof entry.currencyId === "string" ? entry.currencyId : "",
+          unitPrice: entry && typeof entry.unitPrice === "string" ? entry.unitPrice : "",
+          goldCostPerUnit: entry && typeof entry.goldCostPerUnit === "string" ? entry.goldCostPerUnit : "",
+          quantity: entry && typeof entry.quantity === "string" ? entry.quantity : "1"
+        };
+      }
+
+      function normalizeFormulaDraft(draft) {
+        return {
+          editingFormulaId: draft && typeof draft.editingFormulaId === "string" ? draft.editingFormulaId : "",
+          name: draft && typeof draft.name === "string" ? draft.name : "",
+          costItems: Array.isArray(draft && draft.costItems) && draft.costItems.length
+            ? draft.costItems.map(normalizeFormulaEntry)
+            : [createEmptyFormulaEntry()],
+          revenueItems: Array.isArray(draft && draft.revenueItems) && draft.revenueItems.length
+            ? draft.revenueItems.map(normalizeFormulaEntry)
+            : [createEmptyFormulaEntry()]
+        };
+      }
+
+      function normalizeFormulaRecord(formula) {
+        return {
+          id: formula && formula.id ? formula.id : createId("formula"),
+          name: formula && typeof formula.name === "string" ? formula.name : "",
+          costItems: Array.isArray(formula && formula.costItems) && formula.costItems.length
+            ? formula.costItems.map(normalizeFormulaEntry)
+            : [createEmptyFormulaEntry()],
+          revenueItems: Array.isArray(formula && formula.revenueItems) && formula.revenueItems.length
+            ? formula.revenueItems.map(normalizeFormulaEntry)
+            : [createEmptyFormulaEntry()]
+        };
+      }
+
+      function createDefaultRuneArbitrageState() {
+        return {
+          socket4Cost: "",
+          socket4CurrencyId: "",
+          socket4GoldCost: "",
+          extractorCost: "",
+          extractorCurrencyId: "",
+          extractorGoldCost: "",
+          smithCost: "",
+          smithCurrencyId: "",
+          smithGoldCost: "",
+          runes: [createEmptyRuneTarget()]
+        };
+      }
+
+      function getDefaultState() {
+        return {
+          activeTab: "items",
+          showFormulaTab: false,
+          selectedModeKey: "",
+          items: [createEmptyItem()],
+          targets: [createEmptyTarget()],
+          pairs: [createEmptyPair()],
+          runeArbitrage: createDefaultRuneArbitrageState(),
+          formulaArbitrage: createDefaultFormulaArbitrageState()
+        };
+      }
+
+      function normalizeGameState(saved) {
+        if (!saved || typeof saved !== "object") {
+          return getDefaultState();
+        }
+
+        const showFormulaTab = saved.showFormulaTab === true;
+        const activeTab = ["items", "pairs", "targets", "runes", "formulas"].includes(saved.activeTab) ? saved.activeTab : "items";
+
+        return {
+            activeTab: !showFormulaTab && activeTab === "formulas" ? "items" : activeTab,
+            showFormulaTab,
+            selectedModeKey: typeof saved.selectedModeKey === "string" ? saved.selectedModeKey : "",
+            items: Array.isArray(saved.items) && saved.items.length
+              ? saved.items.map((item) => ({
+                  id: item.id || createId("item"),
+                  name: typeof item.name === "string" ? item.name : "",
+                  category: item.category === "target" ? "target" : "currency",
+                  goldCost: typeof item.goldCost === "string" ? item.goldCost : "0"
+                }))
+              : [createEmptyItem()],
+            targets: Array.isArray(saved.targets) && saved.targets.length
+              ? saved.targets.map((target) => ({
+                  id: target.id || createId("target"),
+                  itemId: typeof target.itemId === "string" ? target.itemId : "",
+                  rates: target.rates && typeof target.rates === "object" ? target.rates : {}
+                }))
+              : [createEmptyTarget()],
+            pairs: Array.isArray(saved.pairs) && saved.pairs.length
+              ? saved.pairs.map((pair) => ({
+                  id: pair.id || createId("pair"),
+                  baseItemId: typeof pair.baseItemId === "string" ? pair.baseItemId : "",
+                  quoteItemId: typeof pair.quoteItemId === "string" ? pair.quoteItemId : "",
+                  rate: typeof pair.rate === "string" ? pair.rate : ""
+                }))
+              : [createEmptyPair()],
+            runeArbitrage: saved.runeArbitrage && typeof saved.runeArbitrage === "object"
+              ? {
+                  socket4Cost: typeof saved.runeArbitrage.socket4Cost === "string" ? saved.runeArbitrage.socket4Cost : "",
+                  socket4CurrencyId: typeof saved.runeArbitrage.socket4CurrencyId === "string" ? saved.runeArbitrage.socket4CurrencyId : "",
+                  socket4GoldCost: typeof saved.runeArbitrage.socket4GoldCost === "string" ? saved.runeArbitrage.socket4GoldCost : "",
+                  extractorCost: typeof saved.runeArbitrage.extractorCost === "string" ? saved.runeArbitrage.extractorCost : "",
+                  extractorCurrencyId: typeof saved.runeArbitrage.extractorCurrencyId === "string" ? saved.runeArbitrage.extractorCurrencyId : "",
+                  extractorGoldCost: typeof saved.runeArbitrage.extractorGoldCost === "string" ? saved.runeArbitrage.extractorGoldCost : "",
+                  smithCost: typeof saved.runeArbitrage.smithCost === "string" ? saved.runeArbitrage.smithCost : "",
+                  smithCurrencyId: typeof saved.runeArbitrage.smithCurrencyId === "string" ? saved.runeArbitrage.smithCurrencyId : "",
+                  smithGoldCost: typeof saved.runeArbitrage.smithGoldCost === "string" ? saved.runeArbitrage.smithGoldCost : "",
+                  runes: Array.isArray(saved.runeArbitrage.runes) && saved.runeArbitrage.runes.length
+                    ? saved.runeArbitrage.runes.map((rune) => ({
+                        id: rune.id || createId("rune"),
+                        runeName: typeof rune.runeName === "string" ? rune.runeName : "",
+                        smallPrice: typeof rune.smallPrice === "string" ? rune.smallPrice : "",
+                        smallCurrencyId: typeof rune.smallCurrencyId === "string" ? rune.smallCurrencyId : "",
+                        smallGoldCost: typeof rune.smallGoldCost === "string" ? rune.smallGoldCost : "",
+                        perfectPrice: typeof rune.perfectPrice === "string" ? rune.perfectPrice : "",
+                        perfectCurrencyId: typeof rune.perfectCurrencyId === "string" ? rune.perfectCurrencyId : ""
+                      }))
+                    : [createEmptyRuneTarget()]
+                }
+              : createDefaultRuneArbitrageState(),
+            formulaArbitrage: saved.formulaArbitrage && typeof saved.formulaArbitrage === "object"
+              ? {
+                  draft: normalizeFormulaDraft(saved.formulaArbitrage.draft),
+                  formulas: Array.isArray(saved.formulaArbitrage.formulas)
+                    ? saved.formulaArbitrage.formulas.map(normalizeFormulaRecord)
+                    : []
+                }
+              : createDefaultFormulaArbitrageState()
+        };
+      }
+
+      function getDefaultApplicationState() {
+        return {
+          activeGame: "poe2",
+          games: {
+            poe1: getDefaultState(),
+            poe2: getDefaultState()
+          }
+        };
+      }
+
+      function loadApplicationState() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+          if (saved && typeof saved === "object" && saved.games && typeof saved.games === "object") {
+            return {
+              activeGame: GAME_IDS.includes(saved.activeGame) ? saved.activeGame : "poe2",
+              games: {
+                poe1: normalizeGameState(saved.games.poe1),
+                poe2: normalizeGameState(saved.games.poe2)
+              }
+            };
+          }
+        } catch {
+          // Fall through to legacy migration and independent defaults.
+        }
+
+        let legacyPoe2 = null;
+        try {
+          legacyPoe2 = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || "null");
+        } catch {
+          legacyPoe2 = null;
+        }
+
+        const migratedState = {
+          activeGame: "poe2",
+          games: {
+            poe1: getDefaultState(),
+            poe2: normalizeGameState(legacyPoe2)
+          }
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedState));
+        return migratedState;
+      }
+
+      let applicationState = loadApplicationState();
+      let state = applicationState.games[applicationState.activeGame];
+      const app = document.getElementById("app");
+      let isComposingText = false;
+      let formulaRevealKeyBuffer = "";
+      let draggingTargetId = "";
+      let targetDropMarker = { id: "", placeAfter: false };
+
+      function captureFocusState() {
+        const active = document.activeElement;
+        if (!active || !active.dataset) {
+          return null;
+        }
+
+        return {
+          action: active.dataset.action || "",
+          id: active.dataset.id || "",
+          field: active.dataset.field || "",
+          currencyId: active.dataset.currencyId || "",
+          game: active.dataset.game || "",
+          value: typeof active.value === "string" ? active.value : "",
+          selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
+          selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null
+        };
+      }
+
+      function restoreFocusState(focusState) {
+        if (!focusState || !focusState.action) {
+          return;
+        }
+
+        const selectorParts = [`[data-action="${focusState.action}"]`];
+        if (focusState.id) {
+          selectorParts.push(`[data-id="${focusState.id}"]`);
+        }
+        if (focusState.field) {
+          selectorParts.push(`[data-field="${focusState.field}"]`);
+        }
+        if (focusState.currencyId) {
+          selectorParts.push(`[data-currency-id="${focusState.currencyId}"]`);
+        }
+        if (focusState.game) {
+          selectorParts.push(`[data-game="${focusState.game}"]`);
+        }
+
+        const element = document.querySelector(selectorParts.join(""));
+        if (!element || typeof element.focus !== "function") {
+          return;
+        }
+
+        element.focus();
+        if (typeof element.value === "string" && element.value !== focusState.value) {
+          return;
+        }
+
+        if (typeof element.setSelectionRange === "function" && focusState.selectionStart !== null && focusState.selectionEnd !== null) {
+          element.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
+        }
+      }
+
+      function saveState() {
+        applicationState.games[applicationState.activeGame] = state;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(applicationState));
+      }
+
+      function clearTargetDropClasses() {
+        document.querySelectorAll(".target-row.is-drag-over-before, .target-row.is-drag-over-after").forEach((row) => {
+          row.classList.remove("is-drag-over-before", "is-drag-over-after");
+        });
+      }
+
+      function clearTargetDragState() {
+        draggingTargetId = "";
+        targetDropMarker = { id: "", placeAfter: false };
+        clearTargetDropClasses();
+        document.querySelectorAll(".target-row.is-dragging").forEach((row) => {
+          row.classList.remove("is-dragging");
+        });
+      }
+
+      function moveTargetRow(draggedId, targetId, placeAfter = false) {
+        if (!draggedId || !targetId || draggedId === targetId) {
+          clearTargetDragState();
+          return;
+        }
+
+        const currentIndex = state.targets.findIndex((target) => target.id === draggedId);
+        const targetIndex = state.targets.findIndex((target) => target.id === targetId);
+        if (currentIndex === -1 || targetIndex === -1) {
+          clearTargetDragState();
+          return;
+        }
+
+        const nextTargets = [...state.targets];
+        const [draggedTarget] = nextTargets.splice(currentIndex, 1);
+        let insertIndex = nextTargets.findIndex((target) => target.id === targetId);
+        if (insertIndex === -1) {
+          clearTargetDragState();
+          return;
+        }
+
+        if (placeAfter) {
+          insertIndex += 1;
+        }
+
+        nextTargets.splice(insertIndex, 0, draggedTarget);
+        state.targets = nextTargets;
+        clearTargetDragState();
+        saveState();
+        render();
+      }
+
+      function switchGame(gameId) {
+        if (!GAME_IDS.includes(gameId) || gameId === applicationState.activeGame) {
+          return;
+        }
+
+        saveState();
+        applicationState.activeGame = gameId;
+        state = applicationState.games[gameId];
+        saveState();
+        render();
+      }
+
+      function getItemsByCategory(category) {
+        return state.items.filter((item) => item.category === category);
+      }
+
+      function getItemById(id) {
+        return state.items.find((item) => item.id === id) || null;
+      }
+
+      function getItemName(id) {
+        const item = getItemById(id);
+        return item && item.name ? item.name : "未命名物品";
+      }
+
+      function getItemGoldCost(id) {
+        const item = getItemById(id);
+        const parsed = parseNonNegativeNumber(item ? item.goldCost : "");
+        return parsed === null ? 0 : parsed;
+      }
+
+      function normalizeItemLookupName(name) {
+        return String(name || "").trim().toUpperCase();
+      }
+
+      function normalizeScannerCurrencyName(name) {
+        const text = String(name || "").trim();
+        if (!text) {
+          return "";
+        }
+
+        return SCANNER_CURRENCY_ALIASES[text] || SCANNER_CURRENCY_ALIASES[text.toUpperCase()] || text;
+      }
+
+      function parseColonRatioToNumber(value) {
+        const text = String(value || "").trim();
+        if (!text) {
+          return null;
+        }
+
+        const separator = text.includes(":") ? ":" : text.includes("：") ? "：" : text.includes("/") ? "/" : "";
+        if (!separator) {
+          return parsePositiveNumber(text);
+        }
+
+        const parts = text.split(separator).map((part) => part.trim());
+        if (parts.length !== 2) {
+          return null;
+        }
+
+        const left = Number(parts[0]);
+        const right = Number(parts[1]);
+        if (!Number.isFinite(left) || !Number.isFinite(right) || left <= 0 || right <= 0) {
+          return null;
+        }
+
+        return right / left;
+      }
+
+      function parseImportedRatioParts(value) {
+        const text = String(value || "").trim();
+        if (!text) {
+          return null;
+        }
+
+        const separator = text.includes(":") ? ":" : text.includes("：") ? "：" : text.includes("/") ? "/" : "";
+        if (!separator) {
+          const parsed = parsePositiveNumber(text);
+          return parsed === null ? null : { left: formatImportedNumber(parsed), right: "1" };
+        }
+
+        const parts = text.split(separator).map((part) => part.trim());
+        if (parts.length !== 2) {
+          return null;
+        }
+
+        const left = Number(parts[0]);
+        const right = Number(parts[1]);
+        if (!Number.isFinite(left) || !Number.isFinite(right) || left <= 0 || right <= 0) {
+          return null;
+        }
+
+        return {
+          left: formatImportedNumber(left),
+          right: formatImportedNumber(right)
+        };
+      }
+
+      function formatImportedNumber(value) {
+        if (!Number.isFinite(value)) {
+          return "";
+        }
+
+        return String(Number(value.toFixed(8)));
+      }
+
+      function formatImportedBuyPriceValue(value) {
+        const parts = parseImportedRatioParts(value);
+        return parts ? formatImportedNumber(Number(parts.left) / Number(parts.right)) : "";
+      }
+
+      function formatImportedRatioText(value) {
+        const parts = parseImportedRatioParts(value);
+        return parts ? parts.left + "/" + parts.right : "";
+      }
+
+      function formatImportedSellRatioValue(value) {
+        return formatImportedRatioText(value);
+      }
+
+      function ensureCurrencyItem(name) {
+        const canonicalName = normalizeScannerCurrencyName(name);
+        if (!canonicalName) {
+          return null;
+        }
+
+        const existing = state.items.find((item) =>
+          item.category === "currency" &&
+          normalizeScannerCurrencyName(item.name) === canonicalName
+        );
+        if (existing) {
+          return existing;
+        }
+
+        const reusable = state.items.find((item) => !String(item.name || "").trim());
+        if (reusable) {
+          reusable.name = canonicalName;
+          reusable.category = "currency";
+          reusable.goldCost = reusable.goldCost || "0";
+          return reusable;
+        }
+
+        const item = createEmptyItem();
+        item.name = canonicalName;
+        item.category = "currency";
+        state.items.push(item);
+        return item;
+      }
+
+      function ensureTargetItem(name, goldCost) {
+        const targetName = String(name || "").trim();
+        if (!targetName) {
+          return null;
+        }
+
+        const existing = state.items.find((item) =>
+          item.category === "target" &&
+          normalizeItemLookupName(item.name) === normalizeItemLookupName(targetName)
+        );
+        if (existing) {
+          existing.goldCost = String(goldCost || existing.goldCost || "0");
+          return existing;
+        }
+
+        const reusable = state.items.find((item) => !String(item.name || "").trim());
+        const item = reusable || createEmptyItem();
+        item.name = targetName;
+        item.category = "target";
+        item.goldCost = String(goldCost || "0");
+        if (!reusable) {
+          state.items.push(item);
+        }
+        return item;
+      }
+
+      function ensureCurrencyPair(baseCurrencyId, quoteCurrencyId, rate) {
+        if (!baseCurrencyId || !quoteCurrencyId || !Number.isFinite(rate) || rate <= 0) {
+          return null;
+        }
+
+        const direct = state.pairs.find((pair) => pair.baseItemId === baseCurrencyId && pair.quoteItemId === quoteCurrencyId);
+        if (direct) {
+          direct.rate = formatImportedNumber(rate);
+          return direct;
+        }
+
+        const reverse = state.pairs.find((pair) => pair.baseItemId === quoteCurrencyId && pair.quoteItemId === baseCurrencyId);
+        if (reverse) {
+          reverse.rate = formatImportedNumber(1 / rate);
+          return reverse;
+        }
+
+        const reusable = state.pairs.find((pair) => !pair.baseItemId && !pair.quoteItemId && !pair.rate);
+        const pair = reusable || createEmptyPair();
+        pair.baseItemId = baseCurrencyId;
+        pair.quoteItemId = quoteCurrencyId;
+        pair.rate = formatImportedNumber(rate);
+        if (!reusable) {
+          state.pairs.push(pair);
+        }
+        return pair;
+      }
+
+      function ensureTargetRowForItem(itemId) {
+        const existing = state.targets.find((target) => target.itemId === itemId);
+        if (existing) {
+          return existing;
+        }
+
+        const reusable = state.targets.find((target) => !target.itemId);
+        const target = reusable || createEmptyTarget();
+        target.itemId = itemId;
+        target.rates = target.rates && typeof target.rates === "object" ? target.rates : {};
+        if (!reusable) {
+          state.targets.push(target);
+        }
+        return target;
+      }
+
+      function formatPriceScanV2Ratio(ratio) {
+        const raw = ratio && typeof ratio.raw === "string" ? ratio.raw.trim() : "";
+        if (raw) {
+          return raw;
+        }
+
+        const left = Number(ratio && ratio.left);
+        const right = Number(ratio && ratio.right);
+        if (!Number.isFinite(left) || !Number.isFinite(right) || left <= 0 || right <= 0) {
+          return "";
+        }
+
+        return formatImportedNumber(left) + ":" + formatImportedNumber(right);
+      }
+
+      function normalizePriceScanV2Payload(payload) {
+        if (!payload || payload.schemaVersion !== "poe-trade-scan/v2") {
+          return payload;
+        }
+
+        const pair = payload.pair && typeof payload.pair === "object" ? payload.pair : {};
+        const buyCurrency = String(pair.buyCurrency || "").trim();
+        const sellCurrency = String(pair.sellCurrency || "").trim();
+        const currentPairRatio = formatPriceScanV2Ratio(pair.currentRatio);
+        if (!buyCurrency || !sellCurrency || !currentPairRatio) {
+          throw new Error("V2 扫描结果缺少交易对或当前比例。");
+        }
+
+        const completedItems = Array.isArray(payload.items)
+          ? payload.items.filter((item) => item && (item.status === "ok" || item.status === "imported-v1"))
+          : [];
+
+        return {
+          "购买用通货": buyCurrency,
+          "出售目标通货": sellCurrency,
+          "当前交易对比例": currentPairRatio,
+          "条目": completedItems.map((item) => ({
+            "名字": String(item.name || "").trim(),
+            "金币消耗": String(item.goldCost || ""),
+            "买入比例": formatPriceScanV2Ratio(item.buyRatio),
+            "卖出比例": formatPriceScanV2Ratio(item.sellRatio)
+          }))
+        };
+      }
+
+      function importPriceJson(payload) {
+        payload = normalizePriceScanV2Payload(payload);
+        if (!payload || typeof payload !== "object") {
+          throw new Error("价格表格式不正确。");
+        }
+
+        const buyCurrency = ensureCurrencyItem(payload["购买用通货"]);
+        const sellCurrency = ensureCurrencyItem(payload["出售目标通货"]);
+        const pairRate = parseColonRatioToNumber(payload["当前交易对比例"]);
+        const entries = Array.isArray(payload["条目"]) ? payload["条目"] : [];
+
+        if (!buyCurrency || !sellCurrency || !pairRate) {
+          throw new Error("价格表缺少购买用通货、出售目标通货或当前交易对比例。");
+        }
+
+        ensureCurrencyPair(sellCurrency.id, buyCurrency.id, pairRate);
+
+        entries.forEach((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return;
+          }
+
+          const targetItem = ensureTargetItem(entry["名字"], entry["金币消耗"]);
+          if (!targetItem) {
+            return;
+          }
+
+          const targetRow = ensureTargetRowForItem(targetItem.id);
+          targetRow.rates = {
+            ...targetRow.rates,
+            [buyCurrency.id]: formatImportedBuyPriceValue(entry["买入比例"]),
+            [sellCurrency.id]: formatImportedSellRatioValue(entry["卖出比例"])
+          };
+        });
+
+        state.selectedModeKey = buyCurrency.id + "|" + sellCurrency.id;
+        state.activeTab = "targets";
+        saveState();
+        render();
+      }
+
+      function handlePriceJsonFileImport(file) {
+        if (!file) {
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            importPriceJson(JSON.parse(String(reader.result || "")));
+          } catch (error) {
+            alert(error && error.message ? error.message : "导入价格表失败，请检查 JSON 文件。");
+          }
+        };
+        reader.onerror = () => {
+          alert("读取价格表失败，请重新选择文件。");
+        };
+        reader.readAsText(file, "utf-8");
+      }
+
+      function renderSelectOptions(items, selectedId, placeholder) {
+        const options = [`<option value="">${escapeHtml(placeholder)}</option>`];
+        items.forEach((item) => {
+          options.push(`<option value="${item.id}" ${item.id === selectedId ? "selected" : ""}>${escapeHtml(item.name || "未命名物品")}</option>`);
+        });
+        return options.join("");
+      }
+
+      function getValidPairs() {
+        return state.pairs
+          .map((pair) => {
+            const baseItem = getItemById(pair.baseItemId);
+            const quoteItem = getItemById(pair.quoteItemId);
+            return {
+              ...pair,
+              baseItem,
+              quoteItem,
+              rateNumber: parsePositiveNumber(pair.rate)
+            };
+          })
+          .filter((pair) =>
+            pair.baseItem &&
+            pair.quoteItem &&
+            pair.baseItem.category === "currency" &&
+            pair.quoteItem.category === "currency" &&
+            pair.baseItem.id !== pair.quoteItem.id &&
+            pair.rateNumber
+          );
+      }
+
+      function getModeOptions() {
+        const map = new Map();
+
+        getValidPairs().forEach((pair) => {
+          const buyQuoteMode = {
+            key: pair.quoteItem.id + "|" + pair.baseItem.id,
+            buyCurrencyId: pair.quoteItem.id,
+            sellCurrencyId: pair.baseItem.id,
+            buyCurrencyName: pair.quoteItem.name,
+            sellCurrencyName: pair.baseItem.name,
+            label: pair.quoteItem.name + "买" + pair.baseItem.name + "卖"
+          };
+
+          const buyBaseMode = {
+            key: pair.baseItem.id + "|" + pair.quoteItem.id,
+            buyCurrencyId: pair.baseItem.id,
+            sellCurrencyId: pair.quoteItem.id,
+            buyCurrencyName: pair.baseItem.name,
+            sellCurrencyName: pair.quoteItem.name,
+            label: pair.baseItem.name + "买" + pair.quoteItem.name + "卖"
+          };
+
+          map.set(buyQuoteMode.key, buyQuoteMode);
+          map.set(buyBaseMode.key, buyBaseMode);
+        });
+
+        return Array.from(map.values());
+      }
+
+      function getSelectedMode() {
+        const modes = getModeOptions();
+        if (!modes.length) {
+          return null;
+        }
+
+        const selected = modes.find((mode) => mode.key === state.selectedModeKey);
+        if (selected) {
+          return selected;
+        }
+
+        state.selectedModeKey = modes[0].key;
+        saveState();
+        return modes[0];
+      }
+
+      function getConversionRate(fromCurrencyId, toCurrencyId) {
+        if (!fromCurrencyId || !toCurrencyId) {
+          return null;
+        }
+
+        if (fromCurrencyId === toCurrencyId) {
+          return 1;
+        }
+
+        const direct = getValidPairs().find((pair) => pair.baseItem.id === fromCurrencyId && pair.quoteItem.id === toCurrencyId);
+        if (direct) {
+          return direct.rateNumber;
+        }
+
+        const reverse = getValidPairs().find((pair) => pair.baseItem.id === toCurrencyId && pair.quoteItem.id === fromCurrencyId);
+        if (reverse) {
+          return 1 / reverse.rateNumber;
+        }
+
+        return null;
+      }
+
+      function convertPriceToCurrency(amountText, fromCurrencyId, toCurrencyId) {
+        const amount = parsePositiveNumber(amountText);
+        if (!amount) {
+          return { status: "invalid-amount" };
+        }
+
+        if (!fromCurrencyId || !toCurrencyId) {
+          return { status: "missing-currency" };
+        }
+
+        const rate = getConversionRate(fromCurrencyId, toCurrencyId);
+        if (!rate) {
+          return { status: "missing-rate" };
+        }
+
+        return {
+          status: "ok",
+          value: amount * rate,
+          rate
+        };
+      }
+
+      function convertTradeValueToCurrency(amountText, fromCurrencyId, toCurrencyId, options = {}) {
+        const amount = parseTradeValue(amountText, options);
+        if (!amount) {
+          return { status: "invalid-amount" };
+        }
+
+        if (!fromCurrencyId || !toCurrencyId) {
+          return { status: "missing-currency" };
+        }
+
+        const rate = getConversionRate(fromCurrencyId, toCurrencyId);
+        if (!rate) {
+          return { status: "missing-rate" };
+        }
+
+        return {
+          status: "ok",
+          value: amount * rate,
+          rate,
+          amount
+        };
+      }
+
+      function calculateTargetArbitrage(targetRow, mode) {
+        const targetItem = getItemById(targetRow.itemId);
+        if (!mode) {
+          return { status: "missing-mode", message: "请先配置基础交易对，生成套利模式。" };
+        }
+
+        if (!targetItem || targetItem.category !== "target") {
+          return { status: "missing-target", message: "请先为这一行选择一个标的物。" };
+        }
+
+        const buyPrice = parseTradeValue(targetRow.rates[mode.buyCurrencyId]);
+        const sellPrice = parseTradeValue(targetRow.rates[mode.sellCurrencyId], { allowRatio: true });
+
+        if (!buyPrice || !sellPrice) {
+          return { status: "incomplete", message: "补全当前标的在这两个货币下的价格后，才可计算 ROI 和金币消耗。" };
+        }
+
+        const sellToBuyRate = getConversionRate(mode.sellCurrencyId, mode.buyCurrencyId);
+        if (!sellToBuyRate) {
+          return { status: "missing-pair", message: "缺少 " + mode.sellCurrencyName + " -> " + mode.buyCurrencyName + " 的基础交易对汇率。" };
+        }
+
+        const revenueInBuyCurrency = sellPrice * sellToBuyRate;
+        const netProfitInBuyCurrency = revenueInBuyCurrency - buyPrice;
+        const netProfitInSellCurrency = netProfitInBuyCurrency / sellToBuyRate;
+        const roi = (netProfitInBuyCurrency / buyPrice) * 100;
+
+        const targetGoldCost = getItemGoldCost(targetItem.id);
+        const sellCurrencyGoldCost = sellPrice * getItemGoldCost(mode.sellCurrencyId);
+        const buyCurrencyGoldCost = buyPrice * getItemGoldCost(mode.buyCurrencyId);
+        const totalGoldCost = targetGoldCost + sellCurrencyGoldCost + buyCurrencyGoldCost;
+        const goldPerProfitSellCurrency = netProfitInSellCurrency > 0 ? totalGoldCost / netProfitInSellCurrency : null;
+
+        const reverseRate = getConversionRate(mode.buyCurrencyId, mode.sellCurrencyId);
+        let reverseRoi = null;
+        if (reverseRate) {
+          const reverseRevenue = buyPrice * reverseRate;
+          reverseRoi = ((reverseRevenue - sellPrice) / sellPrice) * 100;
+        }
+
+        return {
+          status: "ok",
+          targetItem,
+          buyPrice,
+          sellPrice,
+          roi,
+          revenueInBuyCurrency,
+          netProfitInBuyCurrency,
+          netProfitInSellCurrency,
+          totalGoldCost,
+          goldPerProfitSellCurrency,
+          goldBreakdown: {
+            targetGoldCost,
+            sellCurrencyGoldCost,
+            buyCurrencyGoldCost
+          },
+          reverseRoi,
+          reverseLabel: mode.sellCurrencyName + "买" + mode.buyCurrencyName + "卖"
+        };
+      }
+
+      function setActiveTab(tab) {
+        state.activeTab = tab;
+        saveState();
+        render();
+      }
+      function calculateRuneArbitrage(runeRow) {
+        const runeName = String(runeRow.runeName || "").trim();
+        const perfectPrice = parseTradeValue(runeRow.perfectPrice, { allowRatio: true });
+
+        if (!runeName) {
+          return { status: "incomplete", message: "请先填写符文类型名称。" };
+        }
+
+        if (!runeRow.perfectCurrencyId) {
+          return { status: "incomplete", message: "请选择完美符文价格的币种。" };
+        }
+
+        if (!perfectPrice) {
+          return { status: "incomplete", message: "请填写有效的完美符文价格。" };
+        }
+
+        const components = [
+          { label: "4孔装备", amount: state.runeArbitrage.socket4Cost, currencyId: state.runeArbitrage.socket4CurrencyId, goldCost: state.runeArbitrage.socket4GoldCost, multiplier: 1, allowRatio: true },
+          { label: "小符文", amount: runeRow.smallPrice, currencyId: runeRow.smallCurrencyId, goldCost: runeRow.smallGoldCost, multiplier: 4, allowRatio: true },
+          { label: "锻匠", amount: state.runeArbitrage.smithCost, currencyId: state.runeArbitrage.smithCurrencyId, goldCost: state.runeArbitrage.smithGoldCost, multiplier: 4, allowRatio: true },
+          { label: "萃取石", amount: state.runeArbitrage.extractorCost, currencyId: state.runeArbitrage.extractorCurrencyId, goldCost: state.runeArbitrage.extractorGoldCost, multiplier: 1, allowRatio: true }
+        ];
+
+        const breakdown = [];
+        let totalCostInPerfectCurrency = 0;
+        let totalGoldCost = 0;
+
+        for (const component of components) {
+          const converted = convertTradeValueToCurrency(component.amount, component.currencyId, runeRow.perfectCurrencyId, {
+            allowRatio: component.allowRatio
+          });
+
+          if (converted.status === "invalid-amount") {
+            return { status: "incomplete", message: `请填写有效的${component.label}价格。` };
+          }
+
+          if (converted.status === "missing-currency") {
+            return { status: "incomplete", message: `请为${component.label}选择价格单位。` };
+          }
+
+          if (converted.status === "missing-rate") {
+            return {
+              status: "missing-rate",
+              message: `缺少 ${getItemName(component.currencyId)} -> ${getItemName(runeRow.perfectCurrencyId)} 的基础交易对汇率。`
+            };
+          }
+
+          const goldCost = parseNonNegativeNumber(component.goldCost);
+          if (goldCost === null) {
+            return { status: "incomplete", message: `请填写有效的${component.label}金币消耗。` };
+          }
+
+          const componentCurrencyGoldCost = getItemGoldCost(component.currencyId);
+          const total = converted.value * component.multiplier;
+          totalCostInPerfectCurrency += total;
+          totalGoldCost += (goldCost + (componentCurrencyGoldCost * converted.amount)) * component.multiplier;
+          breakdown.push({
+            label: component.label,
+            multiplier: component.multiplier,
+            total,
+            goldCost: (goldCost + (componentCurrencyGoldCost * converted.amount)) * component.multiplier
+          });
+        }
+
+        const perfectGoldCost = getItemGoldCost(runeRow.perfectCurrencyId);
+
+        const totalRevenueInPerfectCurrency = 4 * perfectPrice;
+        const totalGoldRevenueCost = perfectGoldCost * totalRevenueInPerfectCurrency;
+        const netProfitInPerfectCurrency = totalRevenueInPerfectCurrency - totalCostInPerfectCurrency;
+        const dCurrency = getItemsByCategory("currency").find((item) => item.name.trim().toUpperCase() === "D") || null;
+        let goldEfficiencyPerDivine = null;
+        let goldEfficiencyMessage = "";
+
+        if (!dCurrency) {
+          goldEfficiencyMessage = "请先在物品列表中新增 D 币种，才能计算金币效率。";
+          } else {
+            const perfectToDRate = getConversionRate(runeRow.perfectCurrencyId, dCurrency.id);
+            if (!perfectToDRate) {
+              goldEfficiencyMessage = `当前币种缺少与 D 的基础交易对，请先构建交易对以便计算金币效率。`;
+            } else {
+            const netProfitInD = netProfitInPerfectCurrency * perfectToDRate;
+            if (netProfitInD > 0) {
+                goldEfficiencyPerDivine = (totalGoldCost + totalGoldRevenueCost) / netProfitInD;
+            } else {
+              goldEfficiencyMessage = "当前净收益不为正，无法计算每获得一个D需要消耗多少金币。";
+            }
+          }
+          }
+
+        return {
+          status: "ok",
+          runeName,
+          perfectCurrencyName: getItemName(runeRow.perfectCurrencyId),
+          perfectPrice,
+          totalRevenueInPerfectCurrency,
+          totalCostInPerfectCurrency,
+          totalGoldCost,
+          totalGoldRevenueCost,
+          netProfitInPerfectCurrency,
+          goldEfficiencyPerDivine,
+          goldEfficiencyMessage,
+          ratioPercent: (((4 * perfectPrice) / totalCostInPerfectCurrency) * 100) - 100,
+          breakdown
+        };
+      }
+
+      function calculateFormulaArbitrage(formula) {
+        const name = String(formula.name || "").trim();
+        const costItems = Array.isArray(formula.costItems) ? formula.costItems : [];
+        const revenueItems = Array.isArray(formula.revenueItems) ? formula.revenueItems : [];
+        const settlementCurrencyId = revenueItems[0].currencyId;
+
+        if (!name) {
+          return { status: "incomplete", message: "请先填写公式名称。" };
+        }
+
+        if (!revenueItems.length) {
+          return { status: "incomplete", message: "请至少保留一条收益项。" };
+        }
+
+        if (!settlementCurrencyId) {
+          return { status: "incomplete", message: "请先为第一条收益项选择币种，作为结算币种。" };
+        }
+
+        const settlementCurrencyName = getItemName(settlementCurrencyId);
+
+        function normalizeFormulaEntries(entries, sideLabel) {
+          const breakdown = [];
+
+          for (const [index, entry] of entries.entries()) {
+            const label = String(entry.label || "").trim();
+            if (!label) {
+              return { status: "incomplete", message: `请先填写第 ${index + 1} 条${sideLabel}的名称。` };
+            }
+
+            const quantity = parsePositiveNumber(entry.quantity);
+            if (!quantity) {
+              return { status: "incomplete", message: `请为${label}填写有效数量。` };
+            }
+
+            const goldCostPerUnit = sideLabel === "成本项" ? parseNonNegativeNumber(entry.goldCostPerUnit) : 0;
+            if (sideLabel === "成本项" && goldCostPerUnit === null) {
+              return { status: "incomplete", message: `请为${label}填写有效的单个金币消耗。` };
+            }
+
+            const converted = convertPriceToCurrency(entry.unitPrice, entry.currencyId, settlementCurrencyId);
+            if (converted.status === "invalid-amount") {
+              return { status: "incomplete", message: `请为${label}填写有效单价。` };
+            }
+
+            if (converted.status === "missing-currency") {
+              return { status: "incomplete", message: `请为${label}选择币种。` };
+            }
+
+            if (converted.status === "missing-rate") {
+              return {
+                status: "missing-rate",
+                message: `缺少 ${getItemName(entry.currencyId)} -> ${settlementCurrencyName} 的基础交易对，请先去基础交易对列表构建交易对。`
+              };
+            }
+
+            const unitPrice = parsePositiveNumber(entry.unitPrice);
+            const currencyGoldCostPerUnit = getItemGoldCost(entry.currencyId);
+            const totalValueInSettlementCurrency = converted.value * quantity;
+            const totalGoldCost = (goldCostPerUnit + (currencyGoldCostPerUnit * unitPrice)) * quantity;
+            breakdown.push({
+              id: entry.id,
+              label,
+              currencyId: entry.currencyId,
+              currencyName: getItemName(entry.currencyId),
+              unitPrice,
+              quantity,
+              totalValueInSettlementCurrency,
+              totalGoldCost,
+              manualGoldCostPerUnit: goldCostPerUnit,
+              currencyGoldCostPerUnit
+            });
+          }
+
+          return { status: "ok", breakdown };
+        }
+
+        const costResult = normalizeFormulaEntries(costItems, "成本项");
+        if (costResult.status !== "ok") {
+          return costResult;
+        }
+
+        const revenueResult = normalizeFormulaEntries(revenueItems, "收益项");
+        if (revenueResult.status !== "ok") {
+          return revenueResult;
+        }
+
+        const costBreakdown = costResult.breakdown;
+        const revenueBreakdown = revenueResult.breakdown;
+        const totalCostInSettlementCurrency = costBreakdown.reduce((sum, item) => sum + item.totalValueInSettlementCurrency, 0);
+        const totalRevenueInSettlementCurrency = revenueBreakdown.reduce((sum, item) => sum + item.totalValueInSettlementCurrency, 0);
+
+        if (totalCostInSettlementCurrency <= 0) {
+          return { status: "incomplete", message: "总成本必须大于 0，才能计算收益率。" };
+        }
+
+        const netProfitInSettlementCurrency = totalRevenueInSettlementCurrency - totalCostInSettlementCurrency;
+        const roiPercent = ((totalRevenueInSettlementCurrency / totalCostInSettlementCurrency) * 100) - 100;
+        const totalGoldCost = costBreakdown.reduce((sum, item) => sum + item.totalGoldCost, 0) + revenueBreakdown.reduce((sum, item) => sum + item.totalGoldCost, 0);
+
+        const dCurrency = getItemsByCategory("currency").find((item) => item.name.trim().toUpperCase() === "D") || null;
+        let goldEfficiencyPerDivine = null;
+        let goldEfficiencyMessage = "";
+
+        if (!dCurrency) {
+          goldEfficiencyMessage = "请先在物品列表中新增 D 币种，才能计算金币效率。";
+        } else {
+          const settlementToDRate = getConversionRate(settlementCurrencyId, dCurrency.id);
+          if (!settlementToDRate) {
+            goldEfficiencyMessage = "当前结算币种缺少与 D 的基础交易对，请先去基础交易对列表构建交易对。";
+          } else {
+            const netProfitInD = netProfitInSettlementCurrency * settlementToDRate;
+            if (netProfitInD > 0) {
+              goldEfficiencyPerDivine = totalGoldCost / netProfitInD;
+            } else {
+              goldEfficiencyMessage = "当前纯利润不为正，无法计算每获得 1 个D需要消耗多少金币。";
+            }
+          }
+        }
+
+        return {
+          status: "ok",
+          name,
+          settlementCurrencyId,
+          settlementCurrencyName,
+          costBreakdown,
+          revenueBreakdown,
+          totalCostInSettlementCurrency,
+          totalRevenueInSettlementCurrency,
+          netProfitInSettlementCurrency,
+          roiPercent,
+          totalGoldCost,
+          goldEfficiencyPerDivine,
+          goldEfficiencyMessage
+        };
+      }
+      function addItem() {
+        state.items.push(createEmptyItem());
+        saveState();
+        render();
+      }
+
+      function removeItem(id) {
+        state.items = state.items.filter((item) => item.id !== id);
+        if (!state.items.length) {
+          state.items.push(createEmptyItem());
+        }
+        saveState();
+        render();
+      }
+
+      function addTarget() {
+        state.targets.push(createEmptyTarget());
+        saveState();
+        render();
+      }
+
+      function removeTarget(id) {
+        state.targets = state.targets.filter((item) => item.id !== id);
+        if (!state.targets.length) {
+          state.targets.push(createEmptyTarget());
+        }
+        saveState();
+        render();
+      }
+
+      function addPair() {
+        state.pairs.push(createEmptyPair());
+        saveState();
+        render();
+      }
+
+      function removePair(id) {
+        state.pairs = state.pairs.filter((item) => item.id !== id);
+        if (!state.pairs.length) {
+          state.pairs.push(createEmptyPair());
+        }
+        saveState();
+        render();
+      }
+
+      function addRuneTarget() {
+        state.runeArbitrage.runes.push(createEmptyRuneTarget());
+        saveState();
+        render();
+      }
+
+      function removeRuneTarget(id) {
+        state.runeArbitrage.runes = state.runeArbitrage.runes.filter((item) => item.id !== id);
+        if (!state.runeArbitrage.runes.length) {
+          state.runeArbitrage.runes.push(createEmptyRuneTarget());
+        }
+        saveState();
+        render();
+      }
+
+      function addFormulaEntry(type) {
+        const field = type === "cost" ? "costItems" : "revenueItems";
+        const entries = state.formulaArbitrage.draft[field];
+        if (entries.length >= 10) {
+          return;
+        }
+
+        state.formulaArbitrage = {
+          ...state.formulaArbitrage,
+          draft: {
+            ...state.formulaArbitrage.draft,
+            [field]: [...entries, createEmptyFormulaEntry()]
+          }
+        };
+        saveState();
+        render();
+      }
+
+      function removeFormulaEntry(type, id) {
+        const field = type === "cost" ? "costItems" : "revenueItems";
+        const entries = state.formulaArbitrage.draft[field];
+        const nextEntries = entries.filter((entry) => entry.id !== id);
+        state.formulaArbitrage = {
+          ...state.formulaArbitrage,
+          draft: {
+            ...state.formulaArbitrage.draft,
+            [field]: nextEntries.length ? nextEntries : [createEmptyFormulaEntry()]
+          }
+        };
+        saveState();
+        render();
+      }
+
+      function updateFormulaDraftField(field, value) {
+        state.formulaArbitrage = {
+          ...state.formulaArbitrage,
+          draft: {
+            ...state.formulaArbitrage.draft,
+            [field]: value
+          }
+        };
+        saveState();
+        render();
+      }
+
+      function updateFormulaEntryField(type, id, field, value) {
+        const listField = type === "cost" ? "costItems" : "revenueItems";
+        state.formulaArbitrage = {
+          ...state.formulaArbitrage,
+          draft: {
+            ...state.formulaArbitrage.draft,
+            [listField]: state.formulaArbitrage.draft[listField].map((entry) => (
+              entry.id === id ? { ...entry, [field]: value } : entry
+            ))
+          }
+        };
+        saveState();
+        render();
+      }
+
+      function saveFormulaDraft() {
+        const draft = normalizeFormulaDraft(state.formulaArbitrage.draft);
+        const formulaId = draft.editingFormulaId || createId("formula");
+        const record = {
+          id: formulaId,
+          name: draft.name,
+          costItems: draft.costItems.map(normalizeFormulaEntry),
+          revenueItems: draft.revenueItems.map(normalizeFormulaEntry)
+        };
+
+        const exists = state.formulaArbitrage.formulas.some((formula) => formula.id === formulaId);
+        state.formulaArbitrage = {
+          ...state.formulaArbitrage,
+          draft: {
+            ...draft,
+            editingFormulaId: formulaId
+          },
+          formulas: exists
+            ? state.formulaArbitrage.formulas.map((formula) => (formula.id === formulaId ? record : formula))
+            : [...state.formulaArbitrage.formulas, record]
+        };
+        saveState();
+        render();
+      }
+
+      function loadFormulaDraft(id) {
+        const formula = state.formulaArbitrage.formulas.find((item) => item.id === id);
+        if (!formula) {
+          return;
+        }
+
+        state.formulaArbitrage = {
+          ...state.formulaArbitrage,
+          draft: {
+            editingFormulaId: formula.id,
+            name: formula.name,
+            costItems: formula.costItems.map(normalizeFormulaEntry),
+            revenueItems: formula.revenueItems.map(normalizeFormulaEntry)
+          }
+        };
+        saveState();
+        render();
+      }
+
+      function updateItemField(id, field, value, shouldRender = true) {
+        state.items = state.items.map((item) => (
+          item.id === id ? { ...item, [field]: field === "category" ? value : value } : item
+        ));
+        saveState();
+        if (shouldRender) {
+          render();
+        }
+      }
+
+      function updatePairField(id, field, value) {
+        state.pairs = state.pairs.map((pair) => (
+          pair.id === id ? { ...pair, [field]: value } : pair
+        ));
+        saveState();
+        render();
+      }
+
+      function updateTargetField(id, field, value) {
+        state.targets = state.targets.map((target) => (
+          target.id === id ? { ...target, [field]: value } : target
+        ));
+        saveState();
+        render();
+      }
+
+      function updateTargetRate(id, currencyId, value) {
+        state.targets = state.targets.map((target) => {
+          if (target.id !== id) {
+            return target;
+          }
+
+          return {
+            ...target,
+            rates: {
+              ...target.rates,
+              [currencyId]: value
+            }
+          };
+        });
+
+        saveState();
+        render();
+      }
+
+      function updateRuneGlobalField(field, value) {
+        state.runeArbitrage = {
+          ...state.runeArbitrage,
+          [field]: value
+        };
+        saveState();
+        render();
+      }
+
+      function updateRuneField(id, field, value) {
+        state.runeArbitrage = {
+          ...state.runeArbitrage,
+          runes: state.runeArbitrage.runes.map((rune) => (
+            rune.id === id ? { ...rune, [field]: value } : rune
+          ))
+        };
+        saveState();
+        render();
+      }
+
+      function renderItemsPage() {
+        const rows = state.items.map((item) => `
+          <tr>
+            <td><input data-action="item-field" data-id="${item.id}" data-field="name" value="${escapeHtml(item.name)}" placeholder="例如 C、D、极品戒指" /></td>
+            <td>
+              <select data-action="item-field" data-id="${item.id}" data-field="category">
+                <option value="currency" ${item.category === "currency" ? "selected" : ""}>币种</option>
+                <option value="target" ${item.category === "target" ? "selected" : ""}>标的物</option>
+              </select>
+            </td>
+            <td><input class="inline-input" data-action="item-field" data-id="${item.id}" data-field="goldCost" value="${escapeHtml(item.goldCost)}" placeholder="例如 25" /></td>
+            <td><span class="hint-text">${item.category === "currency" ? "可在基础交易对与套利模式中使用" : "可在套利标的列表中作为标的被选择"}</span></td>
+            <td><button class="danger-button" data-action="delete-item" data-id="${item.id}">删除</button></td>
+          </tr>
+        `).join("");
+
+        return `
+          <section class="page">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Items</p>
+                  <h2>物品列表</h2>
+                  <p class="panel-copy">所有名字都只在这里维护。物品既可以是币种，也可以是标的物。每个物品都可以配置“每获得 1 个该物品时需要额外消耗的金币”。</p>
+                </div>
+                <button class="primary-button" data-action="add-item">新增物品</button>
+              </div>
+
+              <div class="summary-grid" style="margin-top: 14px;">
+                <article class="summary-card">
+                  <div class="label">币种数量</div>
+                  <div class="value">${getItemsByCategory("currency").length}</div>
+                  <div class="hint">这些物品会出现在基础交易对列表和套利模式中。</div>
+                </article>
+                <article class="summary-card">
+                  <div class="label">标的数量</div>
+                  <div class="value">${getItemsByCategory("target").length}</div>
+                  <div class="hint">这些物品会出现在套利标的列表中供你选择。</div>
+                </article>
+                <article class="summary-card warn">
+                  <div class="label">金币消耗说明</div>
+                  <div class="value">独立成本</div>
+                  <div class="hint">金币不参与三角套利换算，只用于显示这一整套套利流程额外需要消耗多少金币。</div>
+                </article>
+                <article class="summary-card">
+                  <div class="label">命名规则</div>
+                  <div class="value">统一主数据</div>
+                  <div class="hint">以后币种列表和标的列表都不再自由手填名字，只能从这里下拉选择。</div>
+                </article>
+              </div>
+
+              <div class="table-wrap" style="margin-top: 14px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>物品名称</th>
+                      <th>类型</th>
+                      <th>每获得 1 个时的金币消耗</th>
+                      <th>用途说明</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+
+      function renderPairsPage() {
+        const currencyItems = getItemsByCategory("currency");
+
+        if (!currencyItems.length) {
+          return `
+            <section class="page">
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Base Pairs</p>
+                    <h2>套利基础交易对列表</h2>
+                  </div>
+                </div>
+                <p class="panel-copy">先去“物品列表”里新增至少两个币种，然后这里才能下拉选择基础交易对。</p>
+                <div class="empty-state">当前还没有可用的币种物品。请先添加例如 C、D、E 这样的币种。</div>
+              </section>
+            </section>
+          `;
+        }
+
+        const rows = state.pairs.map((pair) => {
+          const baseItem = getItemById(pair.baseItemId);
+          const quoteItem = getItemById(pair.quoteItemId);
+          const rate = parsePositiveNumber(pair.rate);
+          const valid = baseItem && quoteItem && baseItem.id !== quoteItem.id && rate;
+          const modePreview = valid
+            ? `${baseItem.name}买${quoteItem.name}卖 / ${quoteItem.name}买${baseItem.name}卖`
+            : "补全后自动生成模式";
+
+          return `
+            <tr>
+              <td>
+                <select data-action="pair-field" data-id="${pair.id}" data-field="baseItemId">
+                  ${renderSelectOptions(currencyItems, pair.baseItemId, "选择 Base 币种")}
+                </select>
+              </td>
+              <td>
+                <select data-action="pair-field" data-id="${pair.id}" data-field="quoteItemId">
+                  ${renderSelectOptions(currencyItems, pair.quoteItemId, "选择 Quote 币种")}
+                </select>
+              </td>
+              <td><input class="inline-input" data-action="pair-field" data-id="${pair.id}" data-field="rate" value="${escapeHtml(pair.rate)}" placeholder="例如 120" /></td>
+              <td><span class="hint-text">${valid ? `1 ${baseItem.name} = ${formatNumber(rate, 6)} ${quoteItem.name}` : "需要两个不同币种和有效汇率"}</span></td>
+              <td><span class="hint-text">${modePreview}</span></td>
+              <td><button class="danger-button" data-action="delete-pair" data-id="${pair.id}">删除</button></td>
+            </tr>
+          `;
+        }).join("");
+
+        return `
+          <section class="page">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Base Pairs</p>
+                  <h2>套利基础交易对列表</h2>
+                  <p class="panel-copy">这里只能从“物品列表”里已经定义好的币种中下拉选择。录入后会自动生成双向套利模式。</p>
+                </div>
+                <button class="primary-button" data-action="add-pair">新增基础交易对</button>
+              </div>
+
+              <div class="summary-grid" style="margin-top: 14px;">
+                <article class="summary-card">
+                  <div class="label">可选币种数</div>
+                  <div class="value">${currencyItems.length}</div>
+                  <div class="hint">所有币种名称都来自物品列表。</div>
+                </article>
+                <article class="summary-card">
+                  <div class="label">模式生成</div>
+                  <div class="value">双向自动生成</div>
+                  <div class="hint">例如 D/C 会生成 D买C卖 和 C买D卖。</div>
+                </article>
+                <article class="summary-card">
+                  <div class="label">当前可用模式数</div>
+                  <div class="value">${getModeOptions().length}</div>
+                  <div class="hint">只统计已经选中两个币种且汇率有效的行。</div>
+                </article>
+                <article class="summary-card warn">
+                  <div class="label">说明</div>
+                  <div class="value">1 Base = ? Quote</div>
+                  <div class="hint">汇率输入规则仍然是：1 个 Base 币种等于多少个 Quote 币种。</div>
+                </article>
+              </div>
+
+              <div class="table-wrap" style="margin-top: 14px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Base 币种</th>
+                      <th>Quote 币种</th>
+                      <th>汇率</th>
+                      <th>换算含义</th>
+                      <th>会生成的套利模式</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+
+      function renderSummary(mode) {
+        if (!mode) {
+          return "";
+        }
+
+        const conversionRate = getConversionRate(mode.sellCurrencyId, mode.buyCurrencyId);
+
+        return `
+          <section class="summary-grid">
+            <article class="summary-card">
+              <div class="label">当前套利模式</div>
+              <div class="value">${mode.label}</div>
+              <div class="hint">买入货币是 ${mode.buyCurrencyName}，卖出货币是 ${mode.sellCurrencyName}。</div>
+            </article>
+            <article class="summary-card ${conversionRate ? "good" : "bad"}">
+              <div class="label">结算汇率</div>
+              <div class="value">${conversionRate ? `1 ${mode.sellCurrencyName} = ${formatNumber(conversionRate, 6)} ${mode.buyCurrencyName}` : "--"}</div>
+              <div class="hint">${conversionRate ? "ROI 会先把卖出所得换回买入货币后再比较。" : "当前模式缺少基础交易对，ROI 和金币消耗暂时无法计算。"}</div>
+            </article>
+            <article class="summary-card warn">
+              <div class="label">缓存机制</div>
+              <div class="value">按币种缓存</div>
+              <div class="hint">标的对某个币种的价格只需要录一次，切换到别的模式时只要还用到这个币种，就会自动复用。</div>
+            </article>
+            <article class="summary-card">
+              <div class="label">金币消耗说明</div>
+              <div class="value">流程总额</div>
+              <div class="hint">系统会把标的物本身、卖出后得到的币种、以及最终换回的买入币种三部分金币消耗合并显示。</div>
+            </article>
+          </section>
+        `;
+      }
+
+      function renderTargetsPage() {
+        const modes = getModeOptions();
+        const selectedMode = getSelectedMode();
+        const currencyItems = getItemsByCategory("currency");
+        const targetItems = getItemsByCategory("target");
+
+        if (!targetItems.length) {
+          return `
+            <section class="page">
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Targets</p>
+                    <h2>套利标的列表</h2>
+                    <p class="panel-copy">你可以先直接在这里导入价格表；如果想手动维护，也可以先去“物品列表”新增至少一个“标的物”类型的物品。</p>
+                  </div>
+                  <div class="action-row">
+                    <label>
+                      <span class="field-label">当前模式</span>
+                      <select id="mode-select" disabled>
+                        <option value="">请先导入价格表或配置基础交易对</option>
+                      </select>
+                    </label>
+                    <input id="price-json-import" class="hidden" type="file" accept="application/json,.json" />
+                    <button class="ghost-button" data-action="import-price-json" type="button">导入价格表</button>
+                    <button class="primary-button" data-action="add-target" type="button" disabled>新增标的行</button>
+                  </div>
+                </div>
+                <div class="empty-state">当前还没有可用的标的物。请先在物品页新增你想监控套利的装备、道具或其他标的。</div>
+              </section>
+            </section>
+          `;
+        }
+
+        if (!currencyItems.length || !modes.length) {
+          return `
+            <section class="page">
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Targets</p>
+                    <h2>套利标的列表</h2>
+                    <p class="panel-copy">你可以先直接在这里导入价格表；如果想手动维护，请先去“物品列表”和“基础交易对列表”配置币种及其兑换汇率。</p>
+                  </div>
+                  <div class="action-row">
+                    <label>
+                      <span class="field-label">当前模式</span>
+                      <select id="mode-select" disabled>
+                        <option value="">请先导入价格表或配置基础交易对</option>
+                      </select>
+                    </label>
+                    <input id="price-json-import" class="hidden" type="file" accept="application/json,.json" />
+                    <button class="ghost-button" data-action="import-price-json" type="button">导入价格表</button>
+                    <button class="primary-button" data-action="add-target" type="button" disabled>新增标的行</button>
+                  </div>
+                </div>
+                <div class="empty-state">当前还没有可用套利模式。请先在第二个分页配置好至少一组有效的基础交易对。</div>
+              </section>
+            </section>
+          `;
+        }
+
+        const rows = state.targets.map((targetRow) => {
+          const result = calculateTargetArbitrage(targetRow, selectedMode);
+          const buyValue = targetRow.rates[selectedMode.buyCurrencyId] || "";
+          const sellValue = targetRow.rates[selectedMode.sellCurrencyId] || "";
+
+          let roiHtml = `<span class="roi-neutral">待计算</span>`;
+          let goldHtml = `<span class="hint-text">待计算</span>`;
+          let hintHtml = `<span class="hint-text">${result.message}</span>`;
+
+          if (result.status === "ok") {
+            const roiClass = result.roi > 0 ? "roi-positive" : result.roi < 0 ? "roi-negative" : "roi-neutral";
+            roiHtml = `<span class="${roiClass}">${formatPercent(result.roi)}</span>`;
+            goldHtml = `
+              <div class="cell-stack">
+                <strong>${formatNumber(result.totalGoldCost, 2)} 金</strong>
+                <span class="hint-text">
+                  标的 ${formatNumber(result.goldBreakdown.targetGoldCost, 2)}
+                  + ${selectedMode.sellCurrencyName} ${formatNumber(result.goldBreakdown.sellCurrencyGoldCost, 2)}
+                  + ${selectedMode.buyCurrencyName} ${formatNumber(result.goldBreakdown.buyCurrencyGoldCost, 2)}
+                </span>
+              </div>
+            `;
+
+            if (result.roi < 0 && result.reverseRoi !== null && result.reverseRoi > 0) {
+              hintHtml = `
+                <div class="cell-stack">
+                  <span class="hint-text">当前亏损，但改成 <strong>${result.reverseLabel}</strong> 可盈利 <strong class="roi-positive">${formatPercent(result.reverseRoi)}</strong>。</span>
+                  <span class="hint-text">当前模式金币效率：由于净收益为负，暂不计算每赚 1 个 ${selectedMode.sellCurrencyName} 需要多少金币。</span>
+                </div>
+              `;
+            } else if (result.roi > 0) {
+              hintHtml = `
+                <div class="cell-stack">
+                  <span class="hint-text">消耗：<strong class="roi-positive">${formatGoldCompact(result.goldPerProfitSellCurrency)}/${selectedMode.sellCurrencyName}</strong></span>
+                </div>
+              `;
+            } else {
+              hintHtml = `
+                <div class="cell-stack">
+                  <span class="hint-text">当前模式金币效率：由于净收益不为正，暂不计算每赚 1 个 ${selectedMode.sellCurrencyName} 需要多少金币。</span>
+                </div>
+              `;
+            }
+          }
+
+          return `
+            <tr class="target-row" data-target-row-id="${targetRow.id}">
+              <td class="drag-cell">
+                <button
+                  class="drag-handle-button"
+                  data-action="drag-target"
+                  data-id="${targetRow.id}"
+                  draggable="true"
+                  type="button"
+                  aria-label="拖动调整标的物顺序"
+                  title="拖动调整顺序"
+                >≡</button>
+              </td>
+              <td>
+                <div class="cell-stack">
+                  <select data-action="target-field" data-id="${targetRow.id}" data-field="itemId">
+                    ${renderSelectOptions(targetItems, targetRow.itemId, "选择标的物")}
+                  </select>
+                  <span class="hint-text">${targetRow.itemId ? `当前标的：${escapeHtml(getItemName(targetRow.itemId))}` : "未选择标的物"}</span>
+                </div>
+              </td>
+              <td>
+                <div class="cell-stack">
+                  <input
+                    class="inline-input"
+                    data-action="target-rate"
+                    data-id="${targetRow.id}"
+                    data-currency-id="${selectedMode.buyCurrencyId}"
+                    value="${escapeHtml(buyValue)}"
+                    placeholder="1 件标的 = ? ${escapeHtml(selectedMode.buyCurrencyName)}"
+                  />
+                  <span class="hint-text">买入价，使用 ${escapeHtml(selectedMode.buyCurrencyName)}</span>
+                </div>
+              </td>
+              <td>
+                <div class="cell-stack">
+                  <input
+                    class="inline-input"
+                    data-action="target-rate"
+                    data-id="${targetRow.id}"
+                    data-currency-id="${selectedMode.sellCurrencyId}"
+                    value="${escapeHtml(sellValue)}"
+                    placeholder="1 件标的 = ? ${escapeHtml(selectedMode.sellCurrencyName)}"
+                  />
+                  <span class="hint-text">卖出价，使用 ${escapeHtml(selectedMode.sellCurrencyName)}；也支持输入比值，例如 1.5/1 表示 1.5 个标的换 1 个 ${escapeHtml(selectedMode.sellCurrencyName)}</span>
+                </div>
+              </td>
+              <td>${roiHtml}</td>
+              <td>${goldHtml}</td>
+              <td>${hintHtml}</td>
+              <td><button class="danger-button" data-action="delete-target" data-id="${targetRow.id}">删除</button></td>
+            </tr>
+          `;
+        }).join("");
+
+        return `
+          <section class="page">
+            ${renderSummary(selectedMode)}
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Targets</p>
+                  <h2>套利标的列表</h2>
+                  <p class="panel-copy">当前页不再允许自由输入币种名和标的名，必须先在物品页定义，再以下拉形式选择。价格仍会按“币种”维度缓存并跨模式复用。</p>
+                </div>
+                <div class="action-row">
+                  <label>
+                    <span class="field-label">当前模式</span>
+                    <select id="mode-select">
+                      ${modes.map((mode) => `<option value="${mode.key}" ${mode.key === selectedMode.key ? "selected" : ""}>${escapeHtml(mode.label)}</option>`).join("")}
+                    </select>
+                  </label>
+                  <input id="price-json-import" class="hidden" type="file" accept="application/json,.json" />
+                  <button class="ghost-button" data-action="import-price-json" type="button">导入价格表</button>
+                  <button class="primary-button" data-action="add-target">新增标的行</button>
+                </div>
+              </div>
+
+              <div class="table-wrap" style="margin-top: 14px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>排序</th>
+                      <th>标的物</th>
+                      <th>${escapeHtml(selectedMode.buyCurrencyName)} 买入价</th>
+                      <th>${escapeHtml(selectedMode.sellCurrencyName)} 卖出价</th>
+                      <th>ROI</th>
+                      <th>金币消耗</th>
+                      <th>提示</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+      function renderRunesPage() {
+        const currencyItems = getItemsByCategory("currency");
+
+        if (!currencyItems.length) {
+          return `
+            <section class="page">
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Runes</p>
+                    <h2>符文套利</h2>
+                  </div>
+                </div>
+                <p class="panel-copy">请先在前两个分页中配置币种和基础交易对，然后这里才能进行跨币种换算。</p>
+                <div class="empty-state">当前还没有可用币种。</div>
+              </section>
+            </section>
+          `;
+        }
+
+        const rows = state.runeArbitrage.runes.map((runeRow) => {
+          const result = calculateRuneArbitrage(runeRow);
+          let ratioHtml = `<span class="roi-neutral">待计算</span>`;
+          let totalRevenueHtml = `<span class="hint-text">待计算</span>`;
+          let totalCostHtml = `<span class="hint-text">待计算</span>`;
+
+          if (result.status === "ok") {
+            const ratioClass = result.ratioPercent > 100 ? "roi-positive" : result.ratioPercent < 100 ? "roi-negative" : "roi-neutral";
+            ratioHtml = `<span class="${ratioClass}">${formatPercent(result.ratioPercent)}</span>`;
+            totalRevenueHtml = `
+              <div class="cell-stack">
+                <strong>${formatNumber(result.netProfitInPerfectCurrency, 4)} ${escapeHtml(result.perfectCurrencyName)}</strong>
+                <span class="hint-text">纯利润 = 4 x 完美符文价格 - 总成本</span>
+                <span class="hint-text">毛收益：${formatNumber(result.totalRevenueInPerfectCurrency, 4)} ${escapeHtml(result.perfectCurrencyName)}</span>
+                <span class="hint-text">完美符文对应币种金币消耗：${formatNumber(result.totalGoldRevenueCost, 2)} 金</span>
+                <span class="hint-text">${result.goldEfficiencyPerDivine !== null ? `金币效率：每获得 1 个D 约消耗 ${formatGoldCompact(result.goldEfficiencyPerDivine)} 金` : result.goldEfficiencyMessage}</span>
+              </div>
+            `;
+            totalCostHtml = `
+              <div class="cell-stack">
+                <strong>${formatNumber(result.totalCostInPerfectCurrency, 4)} ${escapeHtml(result.perfectCurrencyName)}</strong>
+                ${result.breakdown.map((item) => `<span class="hint-text">${escapeHtml(item.label)}：${item.multiplier > 1 ? `${item.multiplier}x ` : ""}${formatNumber(item.total, 4)} ${escapeHtml(result.perfectCurrencyName)}</span>`).join("")}
+                <span class="hint-text">成本金币消耗（含获取货币）：${formatNumber(result.totalGoldCost, 2)} 金</span>
+              </div>
+            `;
+          } else {
+            totalRevenueHtml = `<span class="hint-text">${result.message}</span>`;
+            totalCostHtml = `<span class="hint-text">${result.message}</span>`;
+          }
+
+          return `
+            <tr>
+              <td>
+                <div class="cell-stack">
+                  <input data-action="rune-field" data-id="${runeRow.id}" data-field="runeName" value="${escapeHtml(runeRow.runeName)}" placeholder="例如 狂怒符文" />
+                  <span class="hint-text">玩家自定义符文类型名称</span>
+                </div>
+              </td>
+              <td>
+                <div class="cell-stack">
+                  <input class="inline-input" data-action="rune-field" data-id="${runeRow.id}" data-field="smallPrice" value="${escapeHtml(runeRow.smallPrice)}" placeholder="小符文价格" />
+                  <select data-action="rune-field" data-id="${runeRow.id}" data-field="smallCurrencyId">
+                    ${renderSelectOptions(currencyItems, runeRow.smallCurrencyId, "小符文币种")}
+                  </select>
+                  <span class="hint-text">支持比例写法，例如 1.3/1</span>
+                  <input class="inline-input" data-action="rune-field" data-id="${runeRow.id}" data-field="smallGoldCost" value="${escapeHtml(runeRow.smallGoldCost)}" placeholder="购买金币消耗" />
+                </div>
+              </td>
+              <td>
+                <div class="cell-stack">
+                  <input class="inline-input" data-action="rune-field" data-id="${runeRow.id}" data-field="perfectPrice" value="${escapeHtml(runeRow.perfectPrice)}" placeholder="完美符文价格" />
+                  <select data-action="rune-field" data-id="${runeRow.id}" data-field="perfectCurrencyId">
+                    ${renderSelectOptions(currencyItems, runeRow.perfectCurrencyId, "完美符文币种")}
+                  </select>
+                  <span class="hint-text">支持比例写法，例如 1.3/1</span>
+                  <span class="hint-text">该币种金币消耗自动读取物品列表中的对应币种金币消耗</span>
+                </div>
+              </td>
+              <td>${ratioHtml}</td>
+              <td>${totalRevenueHtml}</td>
+              <td>${totalCostHtml}</td>
+              <td><button class="danger-button" data-action="delete-rune" data-id="${runeRow.id}">删除</button></td>
+            </tr>
+          `;
+        }).join("");
+
+        return `
+          <section class="page">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Rune Upgrade</p>
+                  <h2>符文套利</h2>
+                  <p class="panel-copy">收益率公式：(4 × 完美符文价格 ÷ (4孔装备价格 + 4 × (小符文价格 + 锻匠价格) + 萃取石价格) × 100%) - 100%。每个价格都能独立选择币种。</p>
+                </div>
+              </div>
+
+              <div class="summary-grid" style="margin-top: 14px;">
+                <label class="summary-card">
+                  <span class="label">4孔装备</span>
+                  <input data-action="rune-global-field" data-field="socket4Cost" value="${escapeHtml(state.runeArbitrage.socket4Cost)}" placeholder="价格" />
+                  <select data-action="rune-global-field" data-field="socket4CurrencyId">
+                    ${renderSelectOptions(currencyItems, state.runeArbitrage.socket4CurrencyId, "选择币种")}
+                  </select>
+                  <input data-action="rune-global-field" data-field="socket4GoldCost" value="${escapeHtml(state.runeArbitrage.socket4GoldCost)}" placeholder="购买金币消耗" />
+                </label>
+                <label class="summary-card">
+                  <span class="label">萃取石</span>
+                  <input data-action="rune-global-field" data-field="extractorCost" value="${escapeHtml(state.runeArbitrage.extractorCost)}" placeholder="价格" />
+                  <select data-action="rune-global-field" data-field="extractorCurrencyId">
+                    ${renderSelectOptions(currencyItems, state.runeArbitrage.extractorCurrencyId, "选择币种")}
+                  </select>
+                  <input data-action="rune-global-field" data-field="extractorGoldCost" value="${escapeHtml(state.runeArbitrage.extractorGoldCost)}" placeholder="购买金币消耗" />
+                </label>
+                <label class="summary-card">
+                  <span class="label">锻匠</span>
+                  <input data-action="rune-global-field" data-field="smithCost" value="${escapeHtml(state.runeArbitrage.smithCost)}" placeholder="价格" />
+                  <select data-action="rune-global-field" data-field="smithCurrencyId">
+                    ${renderSelectOptions(currencyItems, state.runeArbitrage.smithCurrencyId, "选择币种")}
+                  </select>
+                  <input data-action="rune-global-field" data-field="smithGoldCost" value="${escapeHtml(state.runeArbitrage.smithGoldCost)}" placeholder="购买金币消耗" />
+                </label>
+                <article class="summary-card">
+                  <div class="label">换算规则</div>
+                  <div class="value">统一折算到完美符文币种</div>
+                  <div class="hint">如果缺少基础汇率，对应行会提示缺哪一段兑换关系。</div>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Rune Targets</p>
+                  <h2>符文列表</h2>
+                  <p class="panel-copy">每个符文类型单独录入小符文与完美符文价格，并即时展示收益率。</p>
+                </div>
+                <button class="primary-button" data-action="add-rune">新增符文类型</button>
+              </div>
+
+              <div class="table-wrap" style="margin-top: 14px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>符文类型</th>
+                      <th>小符文价格</th>
+                      <th>完美符文价格</th>
+                      <th>收益率</th>
+                      <th>纯利润</th>
+                      <th>总成本</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+      function renderFormulaEntryCards(entries, type, currencyItems) {
+        const addAction = type === "cost" ? "add-formula-cost" : "add-formula-revenue";
+        const panelTitle = type === "cost" ? "材料" : "产物";
+        const addButtonText = type === "cost" ? "新增材料" : "新增产物";
+        const priceLabel = type === "cost" ? "购买价" : "售价";
+        const itemsHtml = entries.map((entry) => `
+          <article class="formula-item-card">
+            <button class="danger-button formula-card-delete" data-action="delete-formula-entry" data-type="${type}" data-id="${entry.id}" ${entries.length <= 1 ? "disabled" : ""}>×</button>
+            <input data-action="formula-entry-field" data-type="${type}" data-id="${entry.id}" data-field="label" value="${escapeHtml(entry.label)}" placeholder="${type === "cost" ? "输入材料名称" : "输入产物名称"}" />
+            <div class="formula-compact-label">${priceLabel}</div>
+            <div class="formula-field-row">
+              <input data-action="formula-entry-field" data-type="${type}" data-id="${entry.id}" data-field="unitPrice" value="${escapeHtml(entry.unitPrice)}" placeholder="${priceLabel}" />
+              <select data-action="formula-entry-field" data-type="${type}" data-id="${entry.id}" data-field="currencyId">
+                ${renderSelectOptions(currencyItems, entry.currencyId, "币种")}
+              </select>
+            </div>
+            ${type === "cost" ? `
+              <div class="formula-inline-row">
+                <span class="formula-compact-label">金币</span>
+                <input data-action="formula-entry-field" data-type="${type}" data-id="${entry.id}" data-field="goldCostPerUnit" value="${escapeHtml(entry.goldCostPerUnit)}" placeholder="金币" />
+              </div>
+            ` : `
+              <div class="formula-inline-hint">该币种出售金币消耗自动读取物品列表</div>
+            `}
+            <div class="formula-inline-row">
+              <span class="formula-compact-label">数量</span>
+              <input data-action="formula-entry-field" data-type="${type}" data-id="${entry.id}" data-field="quantity" value="${escapeHtml(entry.quantity)}" placeholder="数量" />
+            </div>
+          </article>
+        `).join("");
+
+        return `
+          <section class="formula-zone">
+            <h3 class="formula-zone-title">${panelTitle}</h3>
+            <div class="formula-card-row">
+              ${itemsHtml}
+              <button class="formula-add-tile" data-action="${addAction}" title="${addButtonText}">+</button>
+            </div>
+          </section>
+        `;
+      }
+
+      function renderFormulasPage() {
+        const currencyItems = getItemsByCategory("currency");
+        const draft = state.formulaArbitrage.draft;
+
+        if (!currencyItems.length) {
+          return `
+            <section class="page">
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Formula Arbitrage</p>
+                    <h2>公式套利</h2>
+                  </div>
+                </div>
+                <p class="panel-copy">请先在物品列表中新增币种，并在基础交易对列表中维护兑换关系，然后这里才能进行公式套利换算。</p>
+                <div class="empty-state">当前还没有可用币种。</div>
+              </section>
+            </section>
+          `;
+        }
+
+        const result = calculateFormulaArbitrage(draft);
+        const statusHint = draft.editingFormulaId ? "当前正在编辑已保存公式" : "当前正在创建新公式";
+        const settlementText = result.status === "ok" ? result.settlementCurrencyName : "待确定";
+        const costText = result.status === "ok" ? `${formatNumber(result.totalCostInSettlementCurrency, 4)} ${escapeHtml(result.settlementCurrencyName)}` : "--";
+        const revenueText = result.status === "ok" ? `${formatNumber(result.totalRevenueInSettlementCurrency, 4)} ${escapeHtml(result.settlementCurrencyName)}` : "--";
+        const profitText = result.status === "ok" ? `${formatNumber(result.netProfitInSettlementCurrency, 4)} ${escapeHtml(result.settlementCurrencyName)}` : "--";
+        const roiText = result.status === "ok" ? formatPercent(result.roiPercent) : "--";
+        const goldEfficiencyText = result.status === "ok"
+          ? (result.goldEfficiencyPerDivine !== null ? `${formatGoldCompact(result.goldEfficiencyPerDivine)} 金/D` : "--")
+          : "--";
+        const formulaStatusText = result.status === "ok"
+          ? `结算币种：${settlementText}，总成本：${costText}，总收益：${revenueText}。`
+          : `${statusHint}。${result.message}`;
+
+        const savedRows = state.formulaArbitrage.formulas.length
+          ? state.formulaArbitrage.formulas.map((formula) => {
+              const formulaResult = calculateFormulaArbitrage(formula);
+              const roiHtml = formulaResult.status === "ok" ? formatPercent(formulaResult.roiPercent) : formulaResult.message;
+              const profitHtml = formulaResult.status === "ok"
+                ? `${formatNumber(formulaResult.netProfitInSettlementCurrency, 4)} ${escapeHtml(formulaResult.settlementCurrencyName)}`
+                : formulaResult.message;
+              const goldHtml = formulaResult.status === "ok"
+                ? (formulaResult.goldEfficiencyPerDivine !== null ? `${formatGoldCompact(formulaResult.goldEfficiencyPerDivine)} 金/D` : formulaResult.goldEfficiencyMessage)
+                : formulaResult.message;
+
+              return `
+                <tr>
+                  <td>${escapeHtml(formula.name || "未命名公式")}</td>
+                  <td><span class="hint-text">${roiHtml}</span></td>
+                  <td><span class="hint-text">${profitHtml}</span></td>
+                  <td><span class="hint-text">${goldHtml}</span></td>
+                  <td><button class="primary-button" data-action="edit-formula" data-id="${formula.id}">编辑公式</button></td>
+                </tr>
+              `;
+            }).join("")
+          : `
+            <tr>
+              <td colspan="5" class="hint-text">已保存公式列表为空，先在上方创建并保存一个公式吧。</td>
+            </tr>
+          `;
+
+        return `
+          <section class="page">
+            <section class="panel formula-workspace">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Formula Arbitrage</p>
+                  <h2>公式套利</h2>
+                  <p class="panel-copy">${formulaStatusText}</p>
+                </div>
+              </div>
+
+              <div class="formula-topbar" style="margin-top: 14px;">
+                <input
+                  class="formula-name-input"
+                  data-action="formula-draft-field"
+                  data-field="name"
+                  value="${escapeHtml(draft.name)}"
+                  placeholder="输入公式名称"
+                />
+                <div class="formula-metrics">
+                  <div class="formula-metric-inline">纯利润：<strong>${profitText}</strong></div>
+                  <div class="formula-metric-inline">收益率：<strong>${roiText}</strong></div>
+                  <div class="formula-metric-inline">金币效率：<strong>${goldEfficiencyText}</strong></div>
+                </div>
+                <button class="primary-button" data-action="save-formula">保存公式</button>
+              </div>
+
+              ${renderFormulaEntryCards(draft.costItems, "cost", currencyItems)}
+              ${renderFormulaEntryCards(draft.revenueItems, "revenue", currencyItems)}
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Saved Formulas</p>
+                  <h2>已保存公式列表</h2>
+                  <p class="panel-copy">列表中的收益率、纯利润和金币效率会基于当前基础交易对实时刷新。</p>
+                </div>
+              </div>
+
+              <div class="table-wrap" style="margin-top: 14px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>公式名</th>
+                      <th>收益率</th>
+                      <th>纯利润</th>
+                      <th>金币兑换效率</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>${savedRows}</tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        `;
+      }
+      function render() {
+        const focusState = captureFocusState();
+        const currentGameLabel = applicationState.activeGame === "poe1" ? "POE 1" : "POE 2";
+        const itemsPage = renderItemsPage();
+        const pairsPage = renderPairsPage();
+        const targetsPage = renderTargetsPage();
+        const runesPage = renderRunesPage();
+        const formulasPage = renderFormulasPage();
+
+        document.title = currentGameLabel + " 套利工具";
+        app.innerHTML = `
+          <nav class="game-switcher" aria-label="选择游戏">
+            <button class="game-switch-button ${applicationState.activeGame === "poe1" ? "active" : ""}" data-action="switch-game" data-game="poe1" type="button">POE 1</button>
+            <button class="game-switch-button ${applicationState.activeGame === "poe2" ? "active" : ""}" data-action="switch-game" data-game="poe2" type="button">POE 2</button>
+          </nav>
+
+          <section class="hero-card">
+            <p class="eyebrow">${currentGameLabel} Local Tool · 当前游戏</p>
+            <h1 class="hero-title">${currentGameLabel} 本地套利工具</h1>
+            <p class="hero-copy">当前工具分成 5 个分页：物品列表、套利基础交易对列表、套利标的列表、符文套利，以及新增的公式套利分页。</p>
+          </section>
+
+          <nav class="tab-bar">
+            <button class="tab-button ${state.activeTab === "items" ? "active" : ""}" data-action="switch-tab" data-tab="items">物品列表</button>
+            <button class="tab-button ${state.activeTab === "pairs" ? "active" : ""}" data-action="switch-tab" data-tab="pairs">套利基础交易对列表</button>
+            <button class="tab-button ${state.activeTab === "targets" ? "active" : ""}" data-action="switch-tab" data-tab="targets">套利标的列表</button>
+            <button class="tab-button ${state.activeTab === "runes" ? "active" : ""}" data-action="switch-tab" data-tab="runes">符文套利</button>
+            ${state.showFormulaTab ? `<button class="tab-button ${state.activeTab === "formulas" ? "active" : ""}" data-action="switch-tab" data-tab="formulas">公式套利</button>` : ""}
+          </nav>
+
+          <div class="${state.activeTab === "items" ? "" : "hidden"}">${itemsPage}</div>
+          <div class="${state.activeTab === "pairs" ? "" : "hidden"}">${pairsPage}</div>
+          <div class="${state.activeTab === "targets" ? "" : "hidden"}">${targetsPage}</div>
+          <div class="${state.activeTab === "runes" ? "" : "hidden"}">${runesPage}</div>
+          <div class="${state.activeTab === "formulas" ? "" : "hidden"}">${formulasPage}</div>
+        `;
+
+        restoreFocusState(focusState);
+      }
+      document.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-action]");
+        if (!target) {
+          return;
+        }
+
+        const action = target.dataset.action;
+
+        if (action === "switch-game") {
+          switchGame(target.dataset.game);
+          return;
+        }
+
+        if (action === "switch-tab") {
+          setActiveTab(target.dataset.tab);
+          return;
+        }
+
+        if (action === "add-item") {
+          addItem();
+          return;
+        }
+
+        if (action === "delete-item") {
+          removeItem(target.dataset.id);
+          return;
+        }
+
+        if (action === "add-pair") {
+          addPair();
+          return;
+        }
+
+        if (action === "delete-pair") {
+          removePair(target.dataset.id);
+          return;
+        }
+
+        if (action === "add-target") {
+          addTarget();
+          return;
+        }
+
+        if (action === "import-price-json") {
+          const input = document.getElementById("price-json-import");
+          if (input) {
+            input.value = "";
+            input.click();
+          }
+          return;
+        }
+
+        if (action === "delete-target") {
+          removeTarget(target.dataset.id);
+          return;
+        }
+
+        if (action === "add-rune") {
+          addRuneTarget();
+          return;
+        }
+
+        if (action === "delete-rune") {
+          removeRuneTarget(target.dataset.id);
+          return;
+        }
+
+        if (action === "add-formula-cost") {
+          addFormulaEntry("cost");
+          return;
+        }
+
+        if (action === "add-formula-revenue") {
+          addFormulaEntry("revenue");
+          return;
+        }
+
+        if (action === "delete-formula-entry") {
+          removeFormulaEntry(target.dataset.type, target.dataset.id);
+          return;
+        }
+
+        if (action === "save-formula") {
+          saveFormulaDraft();
+          return;
+        }
+
+        if (action === "edit-formula") {
+          loadFormulaDraft(target.dataset.id);
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (isComposingText || event.ctrlKey || event.metaKey || event.altKey) {
+          return;
+        }
+
+        const key = String(event.key || "").toLowerCase();
+        if (key.length !== 1) {
+          return;
+        }
+
+        formulaRevealKeyBuffer = (formulaRevealKeyBuffer + key).slice(-3);
+        if (formulaRevealKeyBuffer === "ppp") {
+          formulaRevealKeyBuffer = "";
+          if (!state.showFormulaTab) {
+            state.showFormulaTab = true;
+            saveState();
+            render();
+          }
+          return;
+        }
+
+        if (formulaRevealKeyBuffer === "ooo") {
+          formulaRevealKeyBuffer = "";
+          if (state.showFormulaTab) {
+            state.showFormulaTab = false;
+            if (state.activeTab === "formulas") {
+              state.activeTab = "items";
+            }
+            saveState();
+            render();
+          }
+        }
+      });
+
+      document.addEventListener("input", (event) => {
+        const target = event.target;
+        const action = target.dataset.action;
+
+        if (action === "item-field" && target.dataset.field !== "category") {
+          updateItemField(target.dataset.id, target.dataset.field, target.value, false);
+          return;
+        }
+
+        if (action === "pair-field" && target.dataset.field === "rate") {
+          updatePairField(target.dataset.id, target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "target-rate") {
+          updateTargetRate(target.dataset.id, target.dataset.currencyId, target.value);
+          return;
+        }
+
+        if (action === "rune-global-field") {
+          updateRuneGlobalField(target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "rune-field") {
+          updateRuneField(target.dataset.id, target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "formula-draft-field") {
+          updateFormulaDraftField(target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "formula-entry-field") {
+          updateFormulaEntryField(target.dataset.type, target.dataset.id, target.dataset.field, target.value);
+        }
+      });
+
+      document.addEventListener("change", (event) => {
+        const target = event.target;
+        const action = target.dataset.action;
+
+        if (target.id === "price-json-import") {
+          handlePriceJsonFileImport(target.files && target.files[0]);
+          return;
+        }
+
+        if (target.id === "mode-select") {
+          state.selectedModeKey = target.value;
+          saveState();
+          render();
+          return;
+        }
+
+        if (action === "item-field" && target.dataset.field === "category") {
+          updateItemField(target.dataset.id, target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "item-field" && target.dataset.field !== "category") {
+          updateItemField(target.dataset.id, target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "pair-field" && (target.dataset.field === "baseItemId" || target.dataset.field === "quoteItemId")) {
+          updatePairField(target.dataset.id, target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "target-field" && target.dataset.field === "itemId") {
+          updateTargetField(target.dataset.id, target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "rune-global-field") {
+          updateRuneGlobalField(target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "rune-field") {
+          updateRuneField(target.dataset.id, target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "formula-draft-field") {
+          updateFormulaDraftField(target.dataset.field, target.value);
+          return;
+        }
+
+        if (action === "formula-entry-field") {
+          updateFormulaEntryField(target.dataset.type, target.dataset.id, target.dataset.field, target.value);
+        }
+      });
+
+      document.addEventListener("compositionstart", (event) => {
+        const target = event.target;
+        if (target && target.dataset && target.dataset.action === "item-field" && target.dataset.field === "name") {
+          isComposingText = true;
+        }
+      });
+
+      document.addEventListener("dragstart", (event) => {
+        const handle = event.target.closest('[data-action="drag-target"]');
+        if (!handle) {
+          return;
+        }
+
+        draggingTargetId = handle.dataset.id || "";
+        targetDropMarker = { id: "", placeAfter: false };
+
+        const row = handle.closest("[data-target-row-id]");
+        if (row) {
+          row.classList.add("is-dragging");
+        }
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", draggingTargetId);
+        }
+      });
+
+      document.addEventListener("dragover", (event) => {
+        if (!draggingTargetId) {
+          return;
+        }
+
+        const row = event.target.closest("[data-target-row-id]");
+        if (!row) {
+          return;
+        }
+
+        const rowId = row.dataset.targetRowId || "";
+        if (!rowId || rowId === draggingTargetId) {
+          clearTargetDropClasses();
+          return;
+        }
+
+        event.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const placeAfter = event.clientY > rect.top + rect.height / 2;
+        targetDropMarker = { id: rowId, placeAfter };
+        clearTargetDropClasses();
+        row.classList.add(placeAfter ? "is-drag-over-after" : "is-drag-over-before");
+      });
+
+      document.addEventListener("drop", (event) => {
+        if (!draggingTargetId) {
+          return;
+        }
+
+        const row = event.target.closest("[data-target-row-id]");
+        if (!row) {
+          clearTargetDragState();
+          return;
+        }
+
+        event.preventDefault();
+        const targetId = row.dataset.targetRowId || targetDropMarker.id;
+        const placeAfter = targetDropMarker.id === targetId ? targetDropMarker.placeAfter : false;
+        moveTargetRow(draggingTargetId, targetId, placeAfter);
+      });
+
+      document.addEventListener("dragend", () => {
+        clearTargetDragState();
+      });
+
+      document.addEventListener("compositionend", (event) => {
+        const target = event.target;
+        if (target && target.dataset && target.dataset.action === "item-field" && target.dataset.field === "name") {
+          isComposingText = false;
+          updateItemField(target.dataset.id, target.dataset.field, target.value);
+        }
+      });
+
+      document.addEventListener("blur", (event) => {
+        const target = event.target;
+        if (
+          target &&
+          target.dataset &&
+          target.dataset.action === "item-field" &&
+          target.dataset.field !== "category" &&
+          !isComposingText
+        ) {
+          updateItemField(target.dataset.id, target.dataset.field, target.value);
+        }
+      }, true);
+
+      render();
+    </script>
+  </body>
+</html>
+
