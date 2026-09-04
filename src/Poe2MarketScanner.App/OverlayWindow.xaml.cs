@@ -39,6 +39,12 @@ public partial class OverlayWindow : Window
             : "观察状态：标注层已锁定，不会阻挡游戏操作。";
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        _viewModel.LayoutChanged -= HandleLayoutChanged;
+        base.OnClosed(e);
+    }
+
     private void HandleLayoutChanged(object? sender, EventArgs e)
     {
         Dispatcher.Invoke(UpdateAllVisuals);

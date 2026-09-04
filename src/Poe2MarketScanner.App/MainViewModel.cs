@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Poe2MarketScanner.App.Services;
 using Poe2MarketScanner.Core.Configuration;
 using Poe2MarketScanner.Core.Ocr;
@@ -20,6 +21,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly string _legacyProfilePath;
     private GameMode _selectedGameMode = GameMode.Poe2;
     private NativeCalculatorViewModel _calculator;
+    private readonly Dictionary<GameMode, (AppProfile Profile, NativeCalculatorViewModel Calculator)> _workspaces = new();
+    private string SettingsPath => Path.Combine(_profilesRoot, "application-settings.json");
     private string _querySourceFile = string.Empty;
     private string _goldCostRawText = "81,000";
     private string _ratioRawText = "675 : 1";
@@ -193,7 +196,49 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void Load()
     {
+        if (File.Exists(SettingsPath))
+        {
+            var settings = JsonSerializer.Deserialize<ApplicationSettings>(File.ReadAllText(SettingsPath));
+            if (settings is not null)
+            {
+                _selectedGameMode = Enum.IsDefined(settings.SelectedGameMode) ? settings.SelectedGameMode : GameMode.Poe2;
+                GoldCostRawText = settings.GoldCostRawText;
+                RatioRawText = settings.RatioRawText;
+            }
+        }
         LoadGameState();
+    }
+
+    public async Task SaveAllWorkspacesAsync()
+    {
+        SynchronizeProfile();
+        _workspaces[SelectedGameMode] = (Profile, Calculator);
+        var saves = _workspaces.Select(entry => (
+            Path: GetProfilePath(entry.Key),
+            Profile: JsonSerializer.Deserialize<AppProfile>(JsonSerializer.Serialize(entry.Value.Profile))!,
+            SaveCalculator: entry.Value.Calculator.CreateSaveAction())).ToArray();
+        var settings = JsonSerializer.Serialize(new ApplicationSettings
+        {
+            SelectedGameMode = SelectedGameMode,
+            GoldCostRawText = GoldCostRawText,
+            RatioRawText = RatioRawText
+        });
+        await Task.Run(() =>
+        {
+            foreach (var save in saves)
+            {
+                _storageService.Save(save.Path, save.Profile);
+                save.SaveCalculator();
+            }
+            AtomicFile.WriteAllText(SettingsPath, settings);
+        });
+    }
+
+    private sealed class ApplicationSettings
+    {
+        public GameMode SelectedGameMode { get; set; } = GameMode.Poe2;
+        public string GoldCostRawText { get; set; } = "81,000";
+        public string RatioRawText { get; set; } = "675 : 1";
     }
 
     public void Save()
@@ -206,14 +251,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public bool TrySave(out string? errorMessage)
     {
-        Profile.QueryList.SourceFile = QuerySourceFile;
-        Profile.QueryList.Items = QueryItems.ToList();
-        Profile.Regions = RegionEntries.ToDictionary(item => item.Key, item => item.Region);
-        Profile.Anchors = AnchorEntries.ToDictionary(item => item.Key, item => item.Anchor);
-        Profile.Ocr.RegionOverrides = OcrRegionEntries.ToDictionary(item => item.Key, item => item.Settings);
-        Profile.SelectedTradeModeKey = TradeModeCatalog.Resolve(Profile.SelectedTradeModeKey).Key;
+        SynchronizeProfile();
         errorMessage = null;
-
         try
         {
             _storageService.Save(ProfilePath, Profile);
@@ -224,6 +263,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
             errorMessage = exception.Message;
             return false;
         }
+    }
+
+    private void SynchronizeProfile()
+    {
+        Profile.QueryList.SourceFile = QuerySourceFile;
+        Profile.QueryList.Items = QueryItems.ToList();
+        Profile.Regions = RegionEntries.ToDictionary(item => item.Key, item => item.Region);
+        Profile.Anchors = AnchorEntries.ToDictionary(item => item.Key, item => item.Anchor);
+        Profile.Ocr.RegionOverrides = OcrRegionEntries.ToDictionary(item => item.Key, item => item.Settings);
+        Profile.SelectedTradeModeKey = TradeModeCatalog.Resolve(Profile.SelectedTradeModeKey).Key;
     }
 
     public void ImportQueryFile(string filePath)
@@ -309,21 +358,31 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     private void LoadGameState()
     {
+        if (_workspaces.TryGetValue(SelectedGameMode, out var workspace))
+        {
+            ApplyProfile(workspace.Profile);
+            _calculator = workspace.Calculator;
+            OnPropertyChanged(nameof(Calculator));
+            return;
+        }
         MigratePoe2DataIfNeeded();
         ApplyProfile(_storageService.Load(ProfilePath));
         _calculator = new NativeCalculatorViewModel(GetCalculatorWorkspacePath(SelectedGameMode));
         _calculator.Load();
+        _workspaces[SelectedGameMode] = (Profile, Calculator);
         OnPropertyChanged(nameof(Calculator));
     }
 
     private void SaveCurrentGameState()
     {
+        SynchronizeProfile();
+        _workspaces[SelectedGameMode] = (Profile, Calculator);
         TrySave(out _);
         try
         {
             Calculator.Save();
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The user can retry saving from the calculator panel; switching games must remain available.
         }

@@ -46,7 +46,7 @@ public sealed class JsonProfileStorageService : IProfileStorageService
         var persisted = PersistedAppProfileMapper.ToPersistedProfile(
             AppProfileNormalizer.Normalize(profile),
             _screenMetricsProvider());
-        File.WriteAllText(path, JsonSerializer.Serialize(persisted, Options));
+        AtomicFile.WriteAllText(path, JsonSerializer.Serialize(persisted, Options));
     }
 
     private sealed class PersistedAppProfile

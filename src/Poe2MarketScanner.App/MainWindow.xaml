@@ -1,225 +1,97 @@
 <ui:FluentWindow x:Class="Poe2MarketScanner.App.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        xmlns:calculator="clr-namespace:Poe2MarketScanner.App.Services"
-        Title="POE 交易助手" Width="1480" MinWidth="1220" Height="980" MinHeight="760"
-        Background="{StaticResource AppBackgroundBrush}"
-        Foreground="{StaticResource AppTextBrush}"
-        ExtendsContentIntoTitleBar="True"
-        WindowBackdropType="Mica">
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:calculator="clr-namespace:Poe2MarketScanner.App.Services"
+                 Title="POE 交易助手" Width="1480" MinWidth="1120" Height="920" MinHeight="700"
+                 Background="{StaticResource AppBackgroundBrush}" Foreground="{StaticResource AppTextBrush}"
+                 ExtendsContentIntoTitleBar="True" WindowBackdropType="Mica">
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style x:Key="PrimaryActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource AppAccentBrush}" /><Setter Property="BorderBrush" Value="{StaticResource AppAccentHoverBrush}" /><Setter Property="Foreground" Value="#1A1409" />
+        </Style>
+        <Style x:Key="SidebarTabItem" TargetType="TabItem">
+            <Setter Property="Width" Value="212" /><Setter Property="Height" Value="64" /><Setter Property="Margin" Value="0,2" /><Setter Property="Foreground" Value="{StaticResource AppMutedTextBrush}" /><Setter Property="FontSize" Value="15" /><Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Border x:Name="NavItem" Background="Transparent" CornerRadius="8,8,8,8" Margin="0,2"><Grid><Border x:Name="ActiveIndicator" Width="3" Height="32" HorizontalAlignment="Left" VerticalAlignment="Center" Background="Transparent" CornerRadius="0,2,2,0" /><ContentPresenter x:Name="NavContent" Margin="14,0,10,0" HorizontalAlignment="Stretch" VerticalAlignment="Center" ContentSource="Header" /></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="NavItem" Property="Background" Value="#1D2A3D" /><Setter TargetName="ActiveIndicator" Property="Background" Value="{StaticResource AppAccentBrush}" /></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavItem" Property="Background" Value="#182335" /></Trigger><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="NavItem" Property="Background" Value="#223047" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="SidebarTabControl" TargetType="TabControl"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl"><ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel IsItemsHost="True" Orientation="Vertical" /></ScrollViewer></ControlTemplate></Setter.Value></Setter></Style>
+        <Style x:Key="CalculatorStepTabs" TargetType="TabControl">
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions><TabPanel IsItemsHost="True" HorizontalAlignment="Left" /><ContentPresenter Grid.Row="1" Margin="0,18,0,0" ContentSource="SelectedContent" /></Grid></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="CalculatorComboCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style x:Key="SectionCaption" TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource AppMutedTextBrush}" /><Setter Property="FontSize" Value="13" /></Style>
+        <Style x:Key="PageTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="28" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{StaticResource AppTextBrush}" /></Style>
     </Window.Resources>
+
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <ui:TitleBar Grid.Row="0"
-                     Height="48"
-                     Title="POE 交易助手"
-                     ShowMinimize="True"
-                     ShowMaximize="True"
-                     ShowClose="True" />
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-        <Grid Margin="20">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <Border Grid.Row="0" Margin="0,0,0,16" Padding="20" CornerRadius="18" Background="#1F2937" BorderBrush="#374151" BorderThickness="1">
-                <DockPanel LastChildFill="False">
-                    <StackPanel DockPanel.Dock="Left" MaxWidth="760">
-                        <TextBlock Text="POE 交易助手" FontSize="28" FontWeight="Bold" />
-                        <TextBlock Margin="0,8,0,0" Foreground="#D1D5DB" TextWrapping="Wrap"
-                                   Text="离线 Windows 程序：屏幕标注、OCR 调试、自动化查询、价格导入与套利计算。" />
-                        <StackPanel Margin="0,12,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Margin="0,0,12,0" VerticalAlignment="Center" Foreground="#D1D5DB" Text="当前游戏" />
-                            <RadioButton GroupName="GameMode" IsChecked="{Binding IsPoe1Mode, Mode=TwoWay}">POE1</RadioButton>
-                            <RadioButton Margin="12,0,0,0" GroupName="GameMode" IsChecked="{Binding IsPoe2Mode, Mode=TwoWay}">POE2</RadioButton>
-                        </StackPanel>
-                        <TextBlock Margin="0,8,0,0" Foreground="#6EE7B7" Text="快捷键：F7 开始自动查询，F8 停止当前自动查询" />
-                    </StackPanel>
-                    <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
-                        <Button Margin="0,0,8,8" Click="ImportProfile_Click">导入配置</Button>
-                        <Button Margin="0,0,8,8" Click="ToggleOverlayEdit_Click">开始/锁定标注</Button>
-                        <Button Margin="0,0,8,8" Click="HideOverlay_Click">隐藏标注层</Button>
-                        <Button x:Name="RunAutomationButton" Margin="0,0,8,8" Click="RunSellAutomation_Click">开始自动查询(F7)</Button>
-                        <Button x:Name="StopAutomationButton" Margin="0,0,8,8" Click="StopAutomation_Click" IsEnabled="False">停止(F8)</Button>
-                        <Button Margin="0,0,0,8" Click="SaveProfile_Click">保存配置</Button>
-                    </WrapPanel>
+    <Grid x:Name="ApplicationContent">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="244" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="48" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+
+        <Border Grid.Column="0" Grid.RowSpan="2" Background="#111722" BorderBrush="#29364A" BorderThickness="0,0,1,0">
+                <DockPanel Margin="16">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,14,0,24"><TextBlock FontSize="20" FontWeight="SemiBold" Text="POE 交易助手" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,6,0,0" Text="市场扫描与套利决策" /><Border Margin="0,20,0,2" Padding="12" Background="#182131" BorderBrush="#2D3C55" BorderThickness="1" CornerRadius="8"><StackPanel><TextBlock Style="{StaticResource SectionCaption}" Text="游戏工作区" /><StackPanel Margin="0,10,0,0" Orientation="Horizontal"><RadioButton GroupName="GameMode" IsChecked="{Binding IsPoe1Mode, Mode=TwoWay}" FontWeight="SemiBold">POE1</RadioButton><RadioButton GroupName="GameMode" IsChecked="{Binding IsPoe2Mode, Mode=TwoWay}" Margin="18,0,0,0" FontWeight="SemiBold">POE2</RadioButton></StackPanel><Border Height="1" Margin="0,12,0,10" Background="#2D3C55" /><TextBlock FontWeight="SemiBold" Foreground="{StaticResource AppSuccessBrush}" Text="{Binding ActiveGameDisplayName, StringFormat={}{0} 工作区已启用}" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,5,0,0" Text="扫描配置与计算数据独立保存" TextWrapping="Wrap" /></StackPanel></Border><TextBlock Style="{StaticResource SectionCaption}" Margin="0,18,0,4" Text="功能" /></StackPanel>
+                    <TabControl x:Name="PrimaryNavigation" TabStripPlacement="Left" Style="{StaticResource SidebarTabControl}" ItemContainerStyle="{StaticResource SidebarTabItem}">
+                        <TabItem><TabItem.Header><Grid Width="184"><Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Border Width="32" Height="32" HorizontalAlignment="Left" VerticalAlignment="Center" Background="#26344A" CornerRadius="7"><ui:SymbolIcon Symbol="Search24" FontSize="18" Foreground="{StaticResource AppAccentHoverBrush}" /></Border><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock FontSize="15" FontWeight="SemiBold" Text="扫价器" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,3,0,0" FontSize="11" Text="扫描与 OCR" /></StackPanel></Grid></TabItem.Header>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="32,28,32,40">
+                                <Grid Margin="0,0,0,24"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel><TextBlock Style="{StaticResource PageTitle}" Text="扫价器" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,8,0,0" Text="准备交易界面、校准识别区域，然后执行批量查询。" /></StackPanel><WrapPanel Grid.Column="1" VerticalAlignment="Center"><Button Margin="0,0,8,0" Click="ImportProfile_Click">导入配置</Button><Button Margin="0,0,8,0" Click="SaveProfile_Click">保存配置</Button><Button Margin="0,0,8,0" Click="ToggleOverlayEdit_Click">编辑标注</Button><Button Click="HideOverlay_Click">隐藏标注</Button></WrapPanel></Grid>
+                                <Border Margin="0,0,0,24" Padding="18" Background="#182131" BorderBrush="#354866" BorderThickness="1" CornerRadius="10"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel><TextBlock FontSize="16" FontWeight="SemiBold" Text="扫描准备" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,6,0,0" Text="确认交易模式、待查询通货和屏幕标注后开始。" /><TextBlock Margin="0,10,0,0" Foreground="{StaticResource AppSuccessBrush}" Text="{Binding QueryItems.Count, StringFormat=当前已载入 {0} 个待查询通货}" /></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button x:Name="StopAutomationButton" Margin="0,0,10,0" Click="StopAutomation_Click" IsEnabled="False">停止 (F8)</Button><Button x:Name="RunAutomationButton" Style="{StaticResource PrimaryActionButton}" Click="RunSellAutomation_Click">开始自动查询 (F7)</Button></StackPanel></Grid></Border>
+                                <TabControl>
+                                    <TabItem Header="扫描设置"><Grid Margin="0,18,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <GroupBox Header="扫描参数" Grid.Column="0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock VerticalAlignment="Center" Margin="0,0,12,12">交易模式</TextBlock><ComboBox Grid.Column="1" Margin="0,0,0,12" ItemsSource="{Binding TradeModes}" DisplayMemberPath="DisplayName" SelectedValuePath="Key" SelectedValue="{Binding SelectedTradeModeKey}" />
+                                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Margin="0,0,12,12">游戏内名称</TextBlock><CheckBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,12" IsChecked="{Binding UseTraditionalChinese}">游戏使用繁体名称时启用</CheckBox>
+                                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Margin="0,0,12,12">输出目录</TextBlock><Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBox Margin="0,0,8,0" Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}" /><Button Grid.Column="1" Click="BrowseOutputDirectory_Click">打开目录</Button></Grid>
+                                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Margin="0,0,12,12">公共操作间隔</TextBlock><TextBox Grid.Row="3" Grid.Column="1" Margin="0,0,0,12" Text="{Binding Profile.Automation.CommonDelayMs, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Margin="0,0,12,0">是否识别金币</TextBlock><CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding RecognizeGoldCost}">查询时识别金币成本</CheckBox>
+                                        </Grid></GroupBox>
+                                        <GroupBox Grid.Column="1" Margin="16,0,0,0" Header="待查询通货"><DockPanel><StackPanel DockPanel.Dock="Top" Margin="0,0,0,12"><WrapPanel><Button Margin="0,0,8,0" Click="ImportQueryFile_Click">导入通货列表</Button><Button Click="BrowseOutputDirectory_Click">打开结果目录</Button></WrapPanel><TextBlock Style="{StaticResource SectionCaption}" Margin="0,10,0,0" Text="导入文本文件后会显示在下方。" /></StackPanel><ListBox ItemsSource="{Binding QueryItems}" MinHeight="220" /></DockPanel></GroupBox>
+                                    </Grid></TabItem>
+                                    <TabItem Header="校准与 OCR"><Grid Margin="0,18,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                                        <WrapPanel Grid.ColumnSpan="2" Margin="0,0,0,16"><Button Margin="0,0,8,0" Click="ToggleOverlayEdit_Click">打开标注编辑</Button><Button Margin="0,0,8,0" Click="RunScreenOcrDebug_Click">运行屏幕 OCR 调试</Button><Button Margin="0,0,8,0" Click="OpenDebugDirectory_Click">打开调试目录</Button><Button Click="ResetProfile_Click">重置当前工作区配置</Button></WrapPanel>
+                                        <GroupBox Grid.Row="1" Header="识别区域"><DataGrid ItemsSource="{Binding RegionEntries}"><DataGrid.Columns><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="名称" Binding="{Binding Region.Name}" Width="*" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="X" Binding="{Binding Region.X, StringFormat=F1}" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="Y" Binding="{Binding Region.Y, StringFormat=F1}" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="宽" Binding="{Binding Region.Width, StringFormat=F1}" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="高" Binding="{Binding Region.Height, StringFormat=F1}" /></DataGrid.Columns></DataGrid></GroupBox>
+                                        <GroupBox Grid.Row="1" Grid.Column="1" Margin="16,0,0,0" Header="点击锚点"><DataGrid ItemsSource="{Binding AnchorEntries}"><DataGrid.Columns><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="名称" Binding="{Binding Anchor.Name}" Width="*" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="X" Binding="{Binding Anchor.X, StringFormat=F1}" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="Y" Binding="{Binding Anchor.Y, StringFormat=F1}" /></DataGrid.Columns></DataGrid></GroupBox>
+                                        <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="OCR 解析预览"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><StackPanel Margin="0,0,16,0"><TextBlock Text="金币原文" /><TextBox Margin="0,6,0,12" Text="{Binding GoldCostRawText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsGoldCostInputEnabled}" /><TextBlock Text="比例原文" /><TextBox Margin="0,6,0,12" Text="{Binding RatioRawText, UpdateSourceTrigger=PropertyChanged}" /><Button HorizontalAlignment="Left" Click="ParseOcrPreview_Click">解析 OCR 文本</Button><TextBlock Margin="0,12,0,0" Foreground="{StaticResource AppSuccessBrush}" TextWrapping="Wrap" Text="{Binding OcrPreviewSummary}" /></StackPanel><DataGrid Grid.Column="1" ItemsSource="{Binding DebugRegions}"><DataGrid.Columns><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="区域" Binding="{Binding RegionName}" Width="*" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="识别文本" Binding="{Binding RawText}" Width="*" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="状态" Binding="{Binding Status}" /></DataGrid.Columns></DataGrid></Grid></GroupBox>
+                                    </Grid></TabItem>
+                                </TabControl>
+                            </StackPanel></ScrollViewer>
+                        </TabItem>
+                        <TabItem><TabItem.Header><Grid Width="184"><Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Border Width="32" Height="32" HorizontalAlignment="Left" VerticalAlignment="Center" Background="#26344A" CornerRadius="7"><ui:SymbolIcon Symbol="Calculator24" FontSize="18" Foreground="{StaticResource AppAccentHoverBrush}" /></Border><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock FontSize="15" FontWeight="SemiBold" Text="套利计算器" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,3,0,0" FontSize="11" Text="价格与收益" /></StackPanel></Grid></TabItem.Header>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="32,28,32,40">
+                                <Grid Margin="0,0,0,24"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel><TextBlock Style="{StaticResource PageTitle}" Text="套利计算器" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,8,0,0" Text="导入扫价结果，设置交易对并查看标的收益。" /></StackPanel><WrapPanel Grid.Column="1" VerticalAlignment="Center"><Button Click="ImportCalculatorScan_Click">导入 V2 价格表</Button></WrapPanel></Grid>
+                                <TabControl Style="{StaticResource CalculatorStepTabs}">
+                                    <TabItem Header="1. 资产与成本"><ui:Card Padding="20" Margin="0,18,0,0"><DockPanel><StackPanel DockPanel.Dock="Top" Margin="0,0,0,16"><WrapPanel><Button Margin="0,0,8,0" Click="AddCalculatorCurrency_Click">新增币种</Button><Button Click="AddCalculatorTargetItem_Click">新增标的物</Button></WrapPanel><TextBlock Style="{StaticResource SectionCaption}" Margin="0,12,0,0" Text="先录入币种与标的物，并补齐获得成本；这是后续计算的基础。" /></StackPanel><DataGrid x:Name="CalculatorItemsGrid" ItemsSource="{Binding Calculator.Items}" CellEditEnding="CalculatorGrid_CellEditEnding"><DataGrid.Columns><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="物品名称" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*" /><DataGridTemplateColumn Header="类型" Width="150" CellStyle="{StaticResource CalculatorComboCell}"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox SelectedValue="{Binding Category, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="Tag"><ComboBoxItem Tag="{x:Static calculator:CalculatorItemCategory.Currency}">币种</ComboBoxItem><ComboBoxItem Tag="{x:Static calculator:CalculatorItemCategory.Target}">标的物</ComboBoxItem></ComboBox></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="每获得 1 个时的金币成本" Binding="{Binding GoldCostText, UpdateSourceTrigger=PropertyChanged}" Width="240" /><DataGridTemplateColumn Header="操作" Width="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Click="RemoveCalculatorItem_Click">删除</Button></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn></DataGrid.Columns></DataGrid></DockPanel></ui:Card></TabItem>
+                                    <TabItem Header="2. 交易对"><ui:Card Padding="20" Margin="0,18,0,0"><DockPanel><StackPanel DockPanel.Dock="Top" Margin="0,0,0,16"><Button HorizontalAlignment="Left" Click="AddCalculatorPair_Click">新增基础交易对</Button><TextBlock Style="{StaticResource SectionCaption}" Margin="0,12,0,0" Text="定义换汇路径：1 个卖出币种可换得多少买入币种；完成后再评估标的。" /></StackPanel><DataGrid x:Name="CalculatorPairsGrid" ItemsSource="{Binding Calculator.Pairs}" CellEditEnding="CalculatorGrid_CellEditEnding"><DataGrid.Columns><DataGridTemplateColumn Header="卖出币种" Width="*" CellStyle="{StaticResource CalculatorComboCell}"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox ItemsSource="{Binding DataContext.Calculator.CurrencyItems, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" SelectedItem="{Binding BaseItem, UpdateSourceTrigger=PropertyChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTemplateColumn Header="买入币种" Width="*" CellStyle="{StaticResource CalculatorComboCell}"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox ItemsSource="{Binding DataContext.Calculator.CurrencyItems, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" SelectedItem="{Binding QuoteItem, UpdateSourceTrigger=PropertyChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="汇率" Binding="{Binding RateText, UpdateSourceTrigger=PropertyChanged}" Width="180" /><DataGridTemplateColumn Header="操作" Width="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Click="RemoveCalculatorPair_Click">删除</Button></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn></DataGrid.Columns></DataGrid></DockPanel></ui:Card></TabItem>
+                                    <TabItem Header="标的套利"><StackPanel><WrapPanel Margin="0,0,0,14"><StackPanel Orientation="Horizontal" Margin="0,0,24,8"><TextBlock Text="基础交易对" VerticalAlignment="Center" Margin="0,0,12,0" /><ComboBox Width="360" ItemsSource="{Binding Calculator.Pairs}" DisplayMemberPath="DisplayName" SelectedItem="{Binding Calculator.SelectedPair, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsSynchronizedWithCurrentItem="False" /></StackPanel><StackPanel Orientation="Horizontal" Margin="0,0,0,8"><TextBlock Text="盈利模式" VerticalAlignment="Center" Margin="0,0,12,0" /><ComboBox Width="160" ItemsSource="{Binding Calculator.ProfitModes}" SelectedItem="{Binding Calculator.ProfitMode, UpdateSourceTrigger=PropertyChanged}" /></StackPanel></WrapPanel><Grid Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Style="{StaticResource SectionCaption}" VerticalAlignment="Center" Text="{Binding Calculator.SelectedPairSummary}" TextWrapping="Wrap" /><Button Grid.Column="1" Margin="16,0,0,0" Click="AddCalculatorTarget_Click">新增套利标的</Button></Grid><ui:Card Padding="20"><DataGrid x:Name="CalculatorTargetsGrid" ItemsSource="{Binding Calculator.Targets}" CellEditEnding="CalculatorGrid_CellEditEnding"><DataGrid.Columns><DataGridTemplateColumn Header="标的物" Width="*" CellStyle="{StaticResource CalculatorComboCell}"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox ItemsSource="{Binding DataContext.Calculator.TargetItems, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" SelectedItem="{Binding TargetItem, UpdateSourceTrigger=PropertyChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="买入价" Binding="{Binding ActiveBuyPriceText, UpdateSourceTrigger=PropertyChanged}" Width="130" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="卖出价" Binding="{Binding ActiveSellPriceText, UpdateSourceTrigger=PropertyChanged}" Width="130" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="ROI" Binding="{Binding RoiText}" IsReadOnly="True" Width="100" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="净利润" Visibility="Collapsed" Binding="{Binding NetProfitText}" IsReadOnly="True" Width="140" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="总金币成本" Visibility="Collapsed" Binding="{Binding TotalGoldCostText}" IsReadOnly="True" Width="140" /><DataGridTextColumn ElementStyle="{StaticResource TableTextDisplay}" EditingElementStyle="{StaticResource TableTextEditor}" Header="计算提示" Binding="{Binding Hint}" IsReadOnly="True" Width="260" /><DataGridTemplateColumn Header="操作" Width="90"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Click="RemoveCalculatorTarget_Click">删除</Button></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn></DataGrid.Columns></DataGrid></ui:Card></StackPanel></TabItem>
+                                </TabControl>
+                            </StackPanel></ScrollViewer>
+                        </TabItem>
+                    </TabControl>
                 </DockPanel>
-            </Border>
-            <TabControl Grid.Row="1">
-                <TabItem Header="主功能">
-                    <Grid Margin="0,16,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                        <GroupBox Header="基础设置" Grid.Column="0">
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <TextBlock VerticalAlignment="Center" Margin="0,0,12,12">交易模式</TextBlock>
-                                <ComboBox Grid.Column="1" Margin="0,0,0,12" ItemsSource="{Binding TradeModes}" DisplayMemberPath="DisplayName" SelectedValuePath="Key" SelectedValue="{Binding SelectedTradeModeKey}" />
-                                <TextBlock Grid.Row="1" VerticalAlignment="Center" Margin="0,0,12,12">导入项数</TextBlock>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,12" FontWeight="SemiBold" Foreground="#6EE7B7" Text="{Binding QueryItems.Count}" />
-                                <TextBlock Grid.Row="2" VerticalAlignment="Center" Margin="0,0,12,12">游戏内名称</TextBlock>
-                                <CheckBox Grid.Row="2" Grid.Column="1" Margin="0,0,0,12" IsChecked="{Binding UseTraditionalChinese}">游戏使用繁体名称时启用</CheckBox>
-                                <TextBlock Grid.Row="3" VerticalAlignment="Center" Margin="0,0,12,12">输出目录</TextBlock>
-                                <Grid Grid.Row="3" Grid.Column="1" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                    <TextBox Margin="0,0,8,0" Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}" />
-                                    <Button Grid.Column="1" Click="BrowseOutputDirectory_Click">打开文件夹</Button>
-                                </Grid>
-                                <TextBlock Grid.Row="4" VerticalAlignment="Center" Margin="0,0,12,12">公共操作间隔(ms)</TextBlock>
-                                <TextBox Grid.Row="4" Grid.Column="1" Margin="0,0,0,12" Text="{Binding Profile.Automation.CommonDelayMs, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Grid.Row="5" VerticalAlignment="Center" Margin="0,0,12,0">是否识别金币</TextBlock>
-                                <CheckBox Grid.Row="5" Grid.Column="1" IsChecked="{Binding RecognizeGoldCost}">查询时识别金币成本</CheckBox>
-                            </Grid>
-                        </GroupBox>
-                        <GroupBox Grid.Column="1" Margin="16,0,0,0" Header="待查询通货">
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
-                                    <Button Margin="0,0,8,0" Click="ImportQueryFile_Click">导入通货列表</Button>
-                                    <Button Click="BrowseOutputDirectory_Click">打开结果目录</Button>
-                                </StackPanel>
-                                <ListBox ItemsSource="{Binding QueryItems}" MinHeight="180" />
-                            </DockPanel>
-                        </GroupBox>
-                    </Grid>
-                </TabItem>
-                <TabItem Header="调试信息">
-                    <Grid Margin="0,16,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                        <WrapPanel Grid.ColumnSpan="2" Margin="0,0,0,16">
-                            <Button Margin="0,0,8,8" Click="RunScreenOcrDebug_Click">运行屏幕OCR调试</Button>
-                            <Button Margin="0,0,8,8" Click="OpenDebugDirectory_Click">打开调试目录</Button>
-                            <Button Margin="0,0,8,8" Click="ResetProfile_Click">重置所有配置</Button>
-                        </WrapPanel>
-                        <GroupBox Grid.Row="1" Header="识别框">
-                            <DataGrid ItemsSource="{Binding RegionEntries}" AutoGenerateColumns="False" CanUserAddRows="False" RowHeaderWidth="0">
-                                <DataGrid.Columns><DataGridTextColumn Header="名称" Binding="{Binding Region.Name}" Width="*" /><DataGridTextColumn Header="X" Binding="{Binding Region.X}" /><DataGridTextColumn Header="Y" Binding="{Binding Region.Y}" /><DataGridTextColumn Header="宽" Binding="{Binding Region.Width}" /><DataGridTextColumn Header="高" Binding="{Binding Region.Height}" /></DataGrid.Columns>
-                            </DataGrid>
-                        </GroupBox>
-                        <GroupBox Grid.Row="1" Grid.Column="1" Margin="16,0,0,0" Header="锚点">
-                            <DataGrid ItemsSource="{Binding AnchorEntries}" AutoGenerateColumns="False" CanUserAddRows="False" RowHeaderWidth="0">
-                                <DataGrid.Columns><DataGridTextColumn Header="名称" Binding="{Binding Anchor.Name}" Width="*" /><DataGridTextColumn Header="X" Binding="{Binding Anchor.X}" /><DataGridTextColumn Header="Y" Binding="{Binding Anchor.Y}" /></DataGrid.Columns>
-                            </DataGrid>
-                        </GroupBox>
-                        <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Margin="0,16,0,0" Header="OCR 调试与调参">
-                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,16,0"><TextBlock>金币原文</TextBlock><TextBox Margin="0,6,0,12" Text="{Binding GoldCostRawText, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsGoldCostInputEnabled}" />
-                                    <TextBlock>比例原文</TextBlock><TextBox Margin="0,6,0,12" Text="{Binding RatioRawText, UpdateSourceTrigger=PropertyChanged}" />
-                                    <Button HorizontalAlignment="Left" Click="ParseOcrPreview_Click">解析 OCR 文本</Button><TextBlock Margin="0,12,0,0" Foreground="#D1D5DB" TextWrapping="Wrap" Text="{Binding OcrPreviewSummary}" />
-                                </StackPanel>
-                                <DataGrid Grid.Column="1" ItemsSource="{Binding DebugRegions}" AutoGenerateColumns="False" CanUserAddRows="False" RowHeaderWidth="0"><DataGrid.Columns><DataGridTextColumn Header="区域" Binding="{Binding RegionName}" Width="*" /><DataGridTextColumn Header="识别文本" Binding="{Binding RawText}" Width="*" /><DataGridTextColumn Header="状态" Binding="{Binding Status}" /></DataGrid.Columns></DataGrid>
-                            </Grid>
-                        </GroupBox>
-                    </Grid>
-                </TabItem>
-                <TabItem Header="套利计算器">
-                    <Grid Margin="0,16,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="3*" MinWidth="280" />
-                            <ColumnDefinition Width="7*" MinWidth="680" />
-                        </Grid.ColumnDefinitions>
-                        <ui:Card Grid.Column="0" Padding="22" Margin="0,0,16,0">
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Top">
-                                    <TextBlock FontSize="22" FontWeight="SemiBold" Text="套利工作台" />
-                                    <TextBlock Margin="0,8,0,0" Foreground="#7DD3FC" FontWeight="SemiBold" Text="{Binding ActiveGameDisplayName}" />
-                                    <TextBlock Margin="0,10,0,20" Opacity="0.78" TextWrapping="Wrap" Text="{Binding Calculator.StatusMessage}" />
-                                </StackPanel>
-                                <StackPanel VerticalAlignment="Bottom">
-                                    <Button Margin="0,0,0,10" Click="ImportCalculatorScan_Click">导入 V2 价格表</Button>
-                                    <Button Margin="0,0,0,10" Click="RecalculateCalculator_Click">重新计算</Button>
-                                    <Button Click="SaveCalculatorWorkspace_Click">保存当前工作区</Button>
-                                </StackPanel>
-                            </DockPanel>
-                        </ui:Card>
-                        <TabControl Grid.Column="1">
-                            <TabItem Header="物品列表">
-                                <ui:Card Padding="20" Margin="0,16,0,0">
-                                    <DockPanel>
-                                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">
-                                            <WrapPanel>
-                                                <Button Margin="0,0,8,0" Click="AddCalculatorCurrency_Click">新增币种</Button>
-                                                <Button Click="AddCalculatorTargetItem_Click">新增标的物</Button>
-                                            </WrapPanel>
-                                            <TextBlock Margin="0,12,0,0" Opacity="0.72" TextWrapping="Wrap" Text="所有名称只在这里维护。币种可用于基础交易对；标的物可在套利表中下拉选择；金币成本会自动参与计算。" />
-                                        </StackPanel>
-                                        <DataGrid x:Name="CalculatorItemsGrid" ItemsSource="{Binding Calculator.Items}" CellEditEnding="CalculatorGrid_CellEditEnding">
-                                            <DataGrid.Columns>
-                                                <DataGridTextColumn Header="物品名称" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="*" />
-                                                <DataGridTemplateColumn Header="类型" Width="160">
-                                                    <DataGridTemplateColumn.CellTemplate><DataTemplate>
-                                                        <ComboBox SelectedValue="{Binding Category, UpdateSourceTrigger=PropertyChanged}" SelectedValuePath="Tag">
-                                                            <ComboBoxItem Tag="{x:Static calculator:CalculatorItemCategory.Currency}">币种</ComboBoxItem>
-                                                            <ComboBoxItem Tag="{x:Static calculator:CalculatorItemCategory.Target}">标的物</ComboBoxItem>
-                                                        </ComboBox>
-                                                    </DataTemplate></DataGridTemplateColumn.CellTemplate>
-                                                </DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="每获得 1 个时的金币成本" Binding="{Binding GoldCostText, UpdateSourceTrigger=PropertyChanged}" Width="240" />
-                                                <DataGridTemplateColumn Header="操作" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Click="RemoveCalculatorItem_Click">删除</Button></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </DockPanel>
-                                </ui:Card>
-                            </TabItem>
-                            <TabItem Header="基础交易对">
-                                <ui:Card Padding="20" Margin="0,16,0,0">
-                                    <DockPanel>
-                                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">
-                                            <Button HorizontalAlignment="Left" Click="AddCalculatorPair_Click">新增基础交易对</Button>
-                                            <TextBlock Margin="0,12,0,0" Opacity="0.72" TextWrapping="Wrap" Text="卖出币种和买入币种只能从币种下拉列表选择。汇率定义：1 个卖出币种 = ? 个买入币种。" />
-                                        </StackPanel>
-                                        <DataGrid x:Name="CalculatorPairsGrid" ItemsSource="{Binding Calculator.Pairs}" CellEditEnding="CalculatorGrid_CellEditEnding">
-                                            <DataGrid.Columns>
-                                                <DataGridTemplateColumn Header="卖出币种" Width="*"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox ItemsSource="{Binding DataContext.Calculator.CurrencyItems, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" SelectedItem="{Binding BaseItem, UpdateSourceTrigger=PropertyChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                                                <DataGridTemplateColumn Header="买入币种" Width="*"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox ItemsSource="{Binding DataContext.Calculator.CurrencyItems, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" SelectedItem="{Binding QuoteItem, UpdateSourceTrigger=PropertyChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="汇率" Binding="{Binding RateText, UpdateSourceTrigger=PropertyChanged}" Width="180" />
-                                                <DataGridTemplateColumn Header="操作" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Click="RemoveCalculatorPair_Click">删除</Button></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </DockPanel>
-                                </ui:Card>
-                            </TabItem>
-                            <TabItem Header="标的套利">
-                                <Grid Margin="0,16,0,0">
-                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                                    <ui:Card Padding="20">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="460" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                            <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" Text="当前套利模式" />
-                                            <ComboBox Grid.Column="1" Margin="0,0,16,0" ItemsSource="{Binding Calculator.Pairs}" DisplayMemberPath="DisplayName" SelectedItem="{Binding Calculator.SelectedPair}" />
-                                            <Button Grid.Column="2" HorizontalAlignment="Left" Click="AddCalculatorTarget_Click">新增套利标的</Button>
-                                        </Grid>
-                                    </ui:Card>
-                                    <TextBlock Grid.Row="1" Margin="0,16" Opacity="0.72" TextWrapping="Wrap" Text="{Binding Calculator.SelectedPairSummary}" />
-                                    <ui:Card Grid.Row="2" Padding="20">
-                                        <DataGrid x:Name="CalculatorTargetsGrid" ItemsSource="{Binding Calculator.Targets}" CellEditEnding="CalculatorGrid_CellEditEnding">
-                                            <DataGrid.Columns>
-                                                <DataGridTemplateColumn Header="标的物" Width="*"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox ItemsSource="{Binding DataContext.Calculator.TargetItems, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" SelectedItem="{Binding TargetItem, UpdateSourceTrigger=PropertyChanged}" /></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                                                <DataGridTextColumn Header="买入价（买入币种）" Binding="{Binding BuyPriceText, UpdateSourceTrigger=PropertyChanged}" Width="160" />
-                                                <DataGridTextColumn Header="卖出价（卖出币种；支持物品/币种）" Binding="{Binding SellPriceText, UpdateSourceTrigger=PropertyChanged}" Width="250" />
-                                                <DataGridTextColumn Header="ROI" Binding="{Binding RoiText}" IsReadOnly="True" Width="110" />
-                                                <DataGridTextColumn Header="净利润" Binding="{Binding NetProfitText}" IsReadOnly="True" Width="160" />
-                                                <DataGridTextColumn Header="总金币成本" Binding="{Binding TotalGoldCostText}" IsReadOnly="True" Width="140" />
-                                                <DataGridTextColumn Header="提示" Binding="{Binding Hint}" IsReadOnly="True" Width="320" />
-                                                <DataGridTemplateColumn Header="操作" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Click="RemoveCalculatorTarget_Click">删除</Button></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                                            </DataGrid.Columns>
-                                        </DataGrid>
-                                    </ui:Card>
-                                </Grid>
-                            </TabItem>
-                        </TabControl>
-                    </Grid>
-                </TabItem>
-            </TabControl>
+        </Border>
+        <ui:TitleBar Grid.Column="1" Grid.Row="0" Title="POE 交易助手" ShowMinimize="True" ShowMaximize="True" ShowClose="True" />
+        <Grid Grid.Column="1" Grid.Row="1">
+            <ContentPresenter Content="{Binding SelectedContent, ElementName=PrimaryNavigation}" />
         </Grid>
-        </ScrollViewer>
+    </Grid>
+        <Border x:Name="ShutdownOverlay" Visibility="Collapsed" Background="#CC0D1016"
+                Panel.ZIndex="1000" Cursor="Wait" Focusable="True">
+            <Border Background="{StaticResource AppSurfaceRaisedBrush}" BorderBrush="{StaticResource AppBorderBrush}"
+                    BorderThickness="1" CornerRadius="12" Padding="32" Width="420"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="正在保存工作区" FontSize="22" FontWeight="SemiBold" />
+                    <TextBlock x:Name="ShutdownStatusText" Margin="0,12,0,20" TextWrapping="Wrap"
+                               Text="正在保存所有工作区的数据、配置和设置，完成后将自动退出。" />
+                    <ProgressBar IsIndeterminate="True" Height="5" />
+                    <TextBlock Margin="0,16,0,0" Foreground="{StaticResource AppMutedTextBrush}"
+                               Text="请稍候，保存期间暂时无法操作。" />
+                </StackPanel>
+            </Border>
+        </Border>
     </Grid>
 </ui:FluentWindow>

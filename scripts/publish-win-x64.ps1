@@ -12,15 +12,58 @@ $solutionPath = Join-Path $projectRoot 'PoeTradeAssistant.sln'
 $applicationProjectPath = Join-Path $projectRoot 'src\Poe2MarketScanner.App\Poe2MarketScanner.App.csproj'
 $artifactsRoot = Join-Path $projectRoot 'artifacts'
 $publishDirectory = Join-Path $artifactsRoot (Join-Path 'publish' $RuntimeIdentifier)
-$zipPath = Join-Path $artifactsRoot "PoeTradeAssistant-$RuntimeIdentifier.zip"
 $executableName = 'PoeTradeAssistant.exe'
+
+function Find-CompatibleDotNet {
+    $candidates = @()
+    if ($env:DOTNET_ROOT) {
+        $candidates += Join-Path $env:DOTNET_ROOT 'dotnet.exe'
+    }
+    $candidates += @(Get-Command dotnet.exe -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
+    $candidates += Join-Path $env:USERPROFILE '.dotnet\dotnet.exe'
+    $candidates += Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet\dotnet.exe'
+    $candidates += Join-Path $env:TEMP 'codex-dotnet10-sdk\dotnet.exe'
+
+    # Resolve each SDK from the project directory so global.json is enforced.
+    Push-Location $projectRoot
+    try {
+        foreach ($candidate in ($candidates | Select-Object -Unique)) {
+            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+            $previousErrorActionPreference = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = 'Continue'
+                $sdkVersion = & $candidate --version 2>$null
+                $sdkExitCode = $LASTEXITCODE
+            }
+            finally {
+                $ErrorActionPreference = $previousErrorActionPreference
+            }
+            if ($sdkExitCode -eq 0) {
+                Write-Host "Using .NET SDK $sdkVersion ($candidate)" -ForegroundColor Cyan
+                return $candidate
+            }
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    $requiredVersion = (Get-Content -LiteralPath (Join-Path $projectRoot 'global.json') -Raw | ConvertFrom-Json).sdk.version
+    throw "No compatible .NET SDK was found. Install .NET SDK $requiredVersion (or a version allowed by global.json), or set DOTNET_ROOT to its directory. The .NET runtime alone is not sufficient."
+}
 
 function Invoke-DotNet {
     param([string[]]$Arguments)
 
-    & dotnet @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
+    Push-Location $projectRoot
+    try {
+        & $dotnetPath @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
 
@@ -32,15 +75,23 @@ if (-not (Test-Path -LiteralPath $applicationProjectPath -PathType Leaf)) {
     throw "Application project was not found: $applicationProjectPath"
 }
 
+$dotnetPath = Find-CompatibleDotNet
+
 New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
 
 $runningProcess = Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($executableName)) -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -eq (Join-Path $publishDirectory $executableName) }
 if ($runningProcess) {
-    throw "Close the running ${executableName} process (PID: $($runningProcess.Id -join ', ')) before packaging."
+    throw "Close the running ${executableName} process (PID: $($runningProcess.Id -join ', ')) before publishing."
 }
 
 if ((Test-Path -LiteralPath $publishDirectory) -and -not $KeepExistingPublishOutput) {
+    $resolvedPublishDirectory = [IO.Path]::GetFullPath($publishDirectory)
+    $expectedPublishDirectory = [IO.Path]::GetFullPath((Join-Path $projectRoot "artifacts\publish\$RuntimeIdentifier"))
+    if ($resolvedPublishDirectory -ne $expectedPublishDirectory -or
+        (Get-Item -LiteralPath $publishDirectory).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "Refusing to clean an unexpected publish directory: $publishDirectory"
+    }
     Remove-Item -LiteralPath $publishDirectory -Recurse -Force
 }
 
@@ -68,32 +119,14 @@ if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
     throw "Publish completed but the executable was not found: $executablePath"
 }
 
-if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -LiteralPath $zipPath -Force
-}
-
-$archiveCompleted = $false
-for ($attempt = 1; $attempt -le 15; $attempt++) {
-    try {
-        Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $zipPath -Force -ErrorAction Stop
-        $archiveCompleted = $true
-        break
-    }
-    catch {
-        if ($attempt -eq 15) {
-            throw
-        }
-
-        Start-Sleep -Seconds 2
-    }
-}
-
-if (-not $archiveCompleted) {
-    throw 'Distribution ZIP could not be created.'
-}
-
 Write-Host ''
-Write-Host 'Package created successfully.' -ForegroundColor Green
+Write-Host 'Publish completed successfully.' -ForegroundColor Green
 Write-Host "Executable: $executablePath"
-Write-Host "Distribution ZIP: $zipPath"
-Write-Host 'Extract the ZIP completely, then start PoeTradeAssistant.exe from the extracted folder.' -ForegroundColor Yellow
+
+Write-Host 'Starting the published application...' -ForegroundColor Cyan
+try {
+    Start-Process -FilePath $executablePath -WorkingDirectory $publishDirectory -ErrorAction Stop | Out-Null
+}
+catch {
+    Write-Warning "Publish completed, but the application could not be started: $($_.Exception.Message). Start it manually: $executablePath"
+}

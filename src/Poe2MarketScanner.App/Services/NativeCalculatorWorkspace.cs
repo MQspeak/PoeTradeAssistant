@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -22,6 +22,13 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
     private readonly ListCollectionView _currencyItems;
     private readonly ListCollectionView _targetItems;
     private CalculatorPairRow? _selectedPair;
+    private string _profitMode = "高买低卖";
+    public IReadOnlyList<string> ProfitModes { get; } = new[] { "高买低卖", "高买高卖", "低买高卖", "低买低卖" };
+    public string ProfitMode
+    {
+        get => _profitMode;
+        set { if (!ProfitModes.Contains(value)) return; SetProperty(ref _profitMode, value); RefreshCalculations(); }
+    }
     private string _statusMessage = "先在物品列表维护币种和标的物；交易对、套利标的均通过下拉选择。";
 
     public NativeCalculatorViewModel(string? workspacePath = null)
@@ -31,7 +38,12 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
         _targetItems = new ListCollectionView(Items) { Filter = item => item is CalculatorItemRow { Category: CalculatorItemCategory.Target } };
         Items.CollectionChanged += Items_CollectionChanged;
         Pairs.CollectionChanged += (_, _) => RefreshCalculations();
-        Targets.CollectionChanged += (_, _) => RefreshCalculations();
+        Targets.CollectionChanged += (_, e) =>
+        {
+            if (e.OldItems is not null) foreach (CalculatorTargetRow row in e.OldItems) row.PropertyChanged -= TargetPriceChanged;
+            if (e.NewItems is not null) foreach (CalculatorTargetRow row in e.NewItems) row.PropertyChanged += TargetPriceChanged;
+            RefreshCalculations();
+        };
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -94,18 +106,25 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
 
     public void Save()
     {
+        CreateSaveAction()();
+        StatusMessage = $"工作区已保存：{_workspacePath}";
+    }
+
+    // Capture UI-bound collections before moving file IO to a worker thread.
+    public Action CreateSaveAction()
+    {
         CacheVisiblePrices(SelectedPair);
-        Directory.CreateDirectory(Path.GetDirectoryName(_workspacePath)!);
         var document = new CalculatorWorkspaceDocument
         {
             SchemaVersion = WorkspaceSchemaVersion,
             SelectedPairKey = SelectedPair?.Key,
+            ProfitMode = ProfitMode,
             Items = Items.Select(item => new CalculatorItemDocument(item.Id, item.Name, item.Category, item.GoldCostText)).ToArray(),
             Pairs = Pairs.Select(pair => new CalculatorPairDocument(pair.BaseItem?.Id, pair.QuoteItem?.Id, pair.RateText)).ToArray(),
             Targets = Targets.Select(target => new CalculatorTargetDocument(target.TargetItem?.Id, target.PricesByCurrencyId)).ToArray()
         };
-        File.WriteAllText(_workspacePath, JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));
-        StatusMessage = $"工作区已保存：{_workspacePath}";
+        var json = JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
+        return () => Poe2MarketScanner.Core.Configuration.AtomicFile.WriteAllText(_workspacePath, json);
     }
 
     public void AddCurrency() => Items.Add(CreateItem(CalculatorItemCategory.Currency));
@@ -154,32 +173,46 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
         }
         pair.RateText = FormatDecimal(pairRate.Value);
 
+        CacheVisiblePrices(SelectedPair);
         var importedCount = 0;
-        foreach (var item in document.Items.Where(item => item.Status is "ok" or "imported-v1"))
+        foreach (var item in document.Items.Where(item => item.Status is "ok" or "imported-v1" || item.PriceObservations.Count > 0))
         {
             if (string.IsNullOrWhiteSpace(item.Name)) continue;
             var targetItem = EnsureItem(item.Name.Trim(), CalculatorItemCategory.Target, item.GoldCost);
-            targetItem.GoldCostText = item.GoldCost;
+            if (!string.IsNullOrWhiteSpace(item.GoldCost)) targetItem.GoldCostText = item.GoldCost;
             var target = Targets.FirstOrDefault(row => ReferenceEquals(row.TargetItem, targetItem));
             if (target is null)
             {
                 target = new CalculatorTargetRow { TargetItem = targetItem };
                 Targets.Add(target);
             }
-            target.SetPrice(buyItem.Id, FormatBuyPrice(item.BuyRatio));
-            target.SetPrice(sellItem.Id, FormatSellPrice(item.SellRatio));
+            var hasFourPriceScan = item.PriceObservations.Count > 0;
+            target.SetPrice(buyItem.Id, hasFourPriceScan ? string.Empty : FormatBuyPrice(item.BuyRatio));
+            target.SetPrice(sellItem.Id, hasFourPriceScan ? string.Empty : FormatSellPrice(item.SellRatio));
+            target.SetPriceBounds(buyItem.Id, item.HighestBuyPrice, item.LowestBuyPrice, true);
+            target.SetPriceBounds(sellItem.Id, item.HighestSellPrice, item.LowestSellPrice, false);
             importedCount++;
         }
 
-        SelectedPair = pair;
+        _selectedPair = pair;
+        LoadVisiblePrices(pair);
+        OnPropertyChanged(nameof(SelectedPair));
         RefreshCalculations();
         Save();
         StatusMessage = $"已导入 {importedCount} 条扫描价格；已恢复为下拉可选的币种、交易对和标的物。";
         return StatusMessage;
     }
 
+    private void TargetPriceChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(CalculatorTargetRow.HighestBuyPriceText) or nameof(CalculatorTargetRow.LowestBuyPriceText)
+            or nameof(CalculatorTargetRow.HighestSellPriceText) or nameof(CalculatorTargetRow.LowestSellPriceText)
+            or nameof(CalculatorTargetRow.BuyPriceText) or nameof(CalculatorTargetRow.SellPriceText) or nameof(CalculatorTargetRow.TargetItem)) RefreshCalculations();
+    }
+
     public void RefreshCalculations()
     {
+        foreach (var target in Targets) target.SetProfitMode(ProfitMode);
         var pair = SelectedPair;
         if (pair?.IsComplete != true || !TryPositive(pair.RateText, out var sellToBuyRate))
         {
@@ -195,9 +228,11 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
                 target.SetResult("待计算", "--", "--", "请选择标的物。", false);
                 continue;
             }
-            if (!TryPositive(target.BuyPriceText, out var buyPrice) || !TryTradeValue(target.SellPriceText, out var sellPrice))
+            var selectedBuy = target.ActiveBuyPriceText;
+            var selectedSell = target.ActiveSellPriceText;
+            if (!TryPositive(selectedBuy, out var buyPrice) || !TryTradeValue(selectedSell, out var sellPrice))
             {
-                target.SetResult("待计算", "--", "--", "请填写有效买入价和卖出价。", false);
+                target.SetResult("待计算", "--", "--", $"请填写{ProfitMode}模式对应的有效买入价和卖出价。", false);
                 continue;
             }
 
@@ -206,14 +241,15 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
             var roi = profitInBuy / buyPrice * 100m;
             var gold = ParseNonNegative(target.TargetItem.GoldCostText) + sellPrice * ParseNonNegative(pair.BaseItem!.GoldCostText) + buyPrice * ParseNonNegative(pair.QuoteItem!.GoldCostText);
             var profitable = profitInBuy > 0;
-            var efficiency = profitable ? $"每赚 1 {pair.BaseItem.Name} 约消耗 {FormatDecimal(gold / (profitInBuy / sellToBuyRate))} 金" : "当前净收益不为正，无法计算金币效率。";
-            target.SetResult($"{(roi >= 0 ? "+" : string.Empty)}{FormatDecimal(roi)}%", $"{(profitInBuy >= 0 ? "+" : string.Empty)}{FormatDecimal(profitInBuy)} {pair.QuoteItem.Name}", $"{FormatDecimal(gold)} 金", efficiency, profitable);
+            var efficiency = profitable ? $"每赚 1 {pair.BaseItem.Name} 约消耗 {(gold / (profitInBuy / sellToBuyRate)).ToString("0.00", CultureInfo.InvariantCulture)} 金" : "当前净收益不为正，无法计算金币效率。";
+            target.SetResult($"{(roi >= 0 ? "+" : string.Empty)}{roi.ToString("0.00", CultureInfo.InvariantCulture)}%", $"{(profitInBuy >= 0 ? "+" : string.Empty)}{FormatDecimal(profitInBuy)} {pair.QuoteItem.Name}", $"{FormatDecimal(gold)} 金", efficiency, profitable);
         }
         OnPropertyChanged(nameof(SelectedPairSummary));
     }
 
     private void ApplyWorkspace(CalculatorWorkspaceDocument document)
     {
+        ProfitMode = document.ProfitMode ?? "高买低卖";
         Items.Clear(); Pairs.Clear(); Targets.Clear();
         foreach (var item in document.Items ?? Array.Empty<CalculatorItemDocument>()) Items.Add(new CalculatorItemRow(item.Id, item.Name, item.Category, item.GoldCost));
         var itemById = Items.ToDictionary(item => item.Id);
@@ -308,6 +344,7 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
     {
         public string SchemaVersion { get; init; } = string.Empty;
         public string? SelectedPairKey { get; init; }
+        public string? ProfitMode { get; init; }
         public IReadOnlyList<CalculatorItemDocument>? Items { get; init; }
         public IReadOnlyList<CalculatorPairDocument>? Pairs { get; init; }
         public IReadOnlyList<CalculatorTargetDocument>? Targets { get; init; }
@@ -355,19 +392,74 @@ public sealed class CalculatorPairRow : NotifyRow
 public sealed class CalculatorTargetRow : NotifyRow
 {
     private CalculatorItemRow? _targetItem; private string _buyPriceText = string.Empty, _sellPriceText = string.Empty, _roiText = "待计算", _netProfitText = "--", _totalGoldCostText = "--", _hint = string.Empty; private bool _isProfitable;
-    public CalculatorTargetRow(IReadOnlyDictionary<string, string>? pricesByCurrencyId = null) { PricesByCurrencyId = pricesByCurrencyId is null ? new Dictionary<string, string>() : new Dictionary<string, string>(pricesByCurrencyId); }
+    public CalculatorTargetRow(IReadOnlyDictionary<string, string>? pricesByCurrencyId = null)
+    {
+        PricesByCurrencyId = pricesByCurrencyId is null ? new Dictionary<string, string>() : new Dictionary<string, string>(pricesByCurrencyId);
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(BuyPriceText) or nameof(LowestBuyPriceText)) OnPropertyChanged(nameof(ActiveBuyPriceText));
+            if (e.PropertyName is nameof(SellPriceText) or nameof(HighestSellPriceText)) OnPropertyChanged(nameof(ActiveSellPriceText));
+        };
+    }
+    private bool _useHighestBuy = true, _useHighestSell;
+    public string ActiveBuyPriceText
+    {
+        get => _useHighestBuy ? HighestBuyPriceText : LowestBuyPriceText;
+        set { if (_useHighestBuy) HighestBuyPriceText = value; else LowestBuyPriceText = value; }
+    }
+    public string ActiveSellPriceText
+    {
+        get => _useHighestSell ? HighestSellPriceText : LowestSellPriceText;
+        set { if (_useHighestSell) HighestSellPriceText = value; else LowestSellPriceText = value; }
+    }
+    public void SetProfitMode(string mode)
+    {
+        var highestBuy = mode.StartsWith("高买", StringComparison.Ordinal);
+        var highestSell = mode.EndsWith("高卖", StringComparison.Ordinal);
+        if (_useHighestBuy != highestBuy) { _useHighestBuy = highestBuy; OnPropertyChanged(nameof(ActiveBuyPriceText)); }
+        if (_useHighestSell != highestSell) { _useHighestSell = highestSell; OnPropertyChanged(nameof(ActiveSellPriceText)); }
+    }
     public Dictionary<string, string> PricesByCurrencyId { get; }
     public CalculatorItemRow? TargetItem { get => _targetItem; set => SetProperty(ref _targetItem, value); }
     public string BuyPriceText { get => _buyPriceText; set => SetProperty(ref _buyPriceText, value); }
     public string SellPriceText { get => _sellPriceText; set => SetProperty(ref _sellPriceText, value); }
+    private string _lowestBuyPriceText = string.Empty, _highestSellPriceText = string.Empty;
+    public string HighestBuyPriceText { get => BuyPriceText; set { BuyPriceText = value; OnPropertyChanged(); } }
+    public string LowestBuyPriceText { get => _lowestBuyPriceText; set => SetProperty(ref _lowestBuyPriceText, value); }
+    public string HighestSellPriceText { get => _highestSellPriceText; set => SetProperty(ref _highestSellPriceText, value); }
+    public string LowestSellPriceText { get => SellPriceText; set { SellPriceText = value; OnPropertyChanged(); } }
     public string RoiText { get => _roiText; private set => SetProperty(ref _roiText, value); }
     public string NetProfitText { get => _netProfitText; private set => SetProperty(ref _netProfitText, value); }
     public string TotalGoldCostText { get => _totalGoldCostText; private set => SetProperty(ref _totalGoldCostText, value); }
     public string Hint { get => _hint; private set => SetProperty(ref _hint, value); }
     public bool IsProfitable { get => _isProfitable; private set => SetProperty(ref _isProfitable, value); }
     public void SetPrice(string currencyId, string price) => PricesByCurrencyId[currencyId] = price;
-    public void CacheVisiblePrices(CalculatorPairRow pair) { PricesByCurrencyId[pair.QuoteItem!.Id] = BuyPriceText; PricesByCurrencyId[pair.BaseItem!.Id] = SellPriceText; }
-    public void LoadVisiblePrices(CalculatorPairRow pair) { BuyPriceText = PricesByCurrencyId.TryGetValue(pair.QuoteItem!.Id, out var buy) ? buy : string.Empty; SellPriceText = PricesByCurrencyId.TryGetValue(pair.BaseItem!.Id, out var sell) ? sell : string.Empty; }
+    // Bounds are unit prices in the corresponding currency. Scanner callers can write these without UI coupling.
+    public void SetPriceBounds(string currencyId, decimal? highest, decimal? lowest, bool isBuy)
+    {
+        var side = isBuy ? "buy" : "sell";
+        PricesByCurrencyId[$"{currencyId}:{side}:high"] = highest?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        PricesByCurrencyId[$"{currencyId}:{side}:low"] = lowest?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+    public void CacheVisiblePrices(CalculatorPairRow pair)
+    {
+        PricesByCurrencyId[pair.QuoteItem!.Id] = BuyPriceText;
+        PricesByCurrencyId[pair.BaseItem!.Id] = SellPriceText;
+        PricesByCurrencyId[$"{pair.QuoteItem.Id}:buy:high"] = HighestBuyPriceText;
+        PricesByCurrencyId[$"{pair.QuoteItem.Id}:buy:low"] = LowestBuyPriceText;
+        PricesByCurrencyId[$"{pair.BaseItem.Id}:sell:high"] = HighestSellPriceText;
+        PricesByCurrencyId[$"{pair.BaseItem.Id}:sell:low"] = LowestSellPriceText;
+    }
+    public void LoadVisiblePrices(CalculatorPairRow pair)
+    {
+        string Read(string currency, string side, string bound, bool legacy) =>
+            PricesByCurrencyId.TryGetValue($"{currency}:{side}:{bound}", out var value) && !string.IsNullOrEmpty(value) ? value :
+            legacy && PricesByCurrencyId.TryGetValue(currency, out var price) ? price : string.Empty;
+        HighestBuyPriceText = Read(pair.QuoteItem!.Id, "buy", "high", true);
+        LowestBuyPriceText = Read(pair.QuoteItem.Id, "buy", "low", false);
+        HighestSellPriceText = Read(pair.BaseItem!.Id, "sell", "high", false);
+        LowestSellPriceText = Read(pair.BaseItem.Id, "sell", "low", true);
+    }
     public void SetResult(string roi, string netProfit, string totalGoldCost, string hint, bool isProfitable) { RoiText = roi; NetProfitText = netProfit; TotalGoldCostText = totalGoldCost; Hint = hint; IsProfitable = isProfitable; }
 }
 

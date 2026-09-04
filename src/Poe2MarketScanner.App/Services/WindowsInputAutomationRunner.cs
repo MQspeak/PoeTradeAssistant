@@ -28,8 +28,14 @@ public sealed class WindowsInputAutomationRunner : IInputAutomationRunner
         await Task.Delay(80, cancellationToken);
 
         SendMouse(MouseEventLeftDown);
-        await Task.Delay(30, cancellationToken);
-        SendMouse(MouseEventLeftUp);
+        try
+        {
+            await Task.Delay(30, cancellationToken);
+        }
+        finally
+        {
+            SendMouse(MouseEventLeftUp);
+        }
         await Task.Delay(80, cancellationToken);
     }
 
@@ -50,21 +56,32 @@ public sealed class WindowsInputAutomationRunner : IInputAutomationRunner
         SetCursorPos((int)Math.Round(x), (int)Math.Round(y));
         await Task.Delay(80, cancellationToken);
 
-        foreach (var key in keys)
+        var pressedKeys = new List<ushort>();
+        try
         {
-            SendKeyDown(key);
-            await Task.Delay(20, cancellationToken);
+            foreach (var key in keys)
+            {
+                SendKeyDown(key);
+                pressedKeys.Add(key);
+                await Task.Delay(20, cancellationToken);
+            }
+
+            SendMouse(MouseEventLeftDown);
+            try
+            {
+                await Task.Delay(30, cancellationToken);
+            }
+            finally
+            {
+                SendMouse(MouseEventLeftUp);
+            }
+            await Task.Delay(30, cancellationToken);
         }
 
-        SendMouse(MouseEventLeftDown);
-        await Task.Delay(30, cancellationToken);
-        SendMouse(MouseEventLeftUp);
-        await Task.Delay(30, cancellationToken);
-
-        for (var i = keys.Count - 1; i >= 0; i--)
+        finally
         {
-            SendKeyUp(keys[i]);
-            await Task.Delay(20, cancellationToken);
+            for (var i = pressedKeys.Count - 1; i >= 0; i--)
+                SendKeyUp(pressedKeys[i]);
         }
 
         await Task.Delay(80, cancellationToken);
@@ -78,12 +95,24 @@ public sealed class WindowsInputAutomationRunner : IInputAutomationRunner
         await Task.Delay(80, cancellationToken);
 
         SendKeyDown(VkControl);
-        await Task.Delay(30, cancellationToken);
-        SendMouse(MouseEventLeftDown);
-        await Task.Delay(30, cancellationToken);
-        SendMouse(MouseEventLeftUp);
-        await Task.Delay(30, cancellationToken);
-        SendKeyUp(VkControl);
+        try
+        {
+            await Task.Delay(30, cancellationToken);
+            SendMouse(MouseEventLeftDown);
+            try
+            {
+                await Task.Delay(30, cancellationToken);
+            }
+            finally
+            {
+                SendMouse(MouseEventLeftUp);
+            }
+            await Task.Delay(30, cancellationToken);
+        }
+        finally
+        {
+            SendKeyUp(VkControl);
+        }
         await Task.Delay(80, cancellationToken);
     }
 

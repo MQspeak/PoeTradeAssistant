@@ -17,6 +17,11 @@ public sealed class SellQueryBatchResult
 
 public sealed class SellQueryItemResult
 {
+    public decimal? HighestBuyPrice { get; set; }
+    public decimal? LowestBuyPrice { get; set; }
+    public decimal? HighestSellPrice { get; set; }
+    public decimal? LowestSellPrice { get; set; }
+    public Dictionary<string, ScanPriceObservation> PriceObservations { get; } = new();
     public string CurrencyName { get; set; } = string.Empty;
     public string BuyCurrencyName { get; set; } = string.Empty;
     public string SellCurrencyName { get; set; } = string.Empty;
@@ -31,4 +36,12 @@ public sealed class SellQueryItemResult
     public string Status { get; set; } = string.Empty;
     public string? ErrorMessage { get; set; }
     public DateTimeOffset CapturedAt { get; set; }
+}
+
+public sealed class ScanPriceObservation
+{
+    public string Raw { get; init; } = string.Empty;
+    public string Normalized { get; init; } = string.Empty;
+    public string Status { get; init; } = "pending";
+    public string? ErrorMessage { get; init; }
 }

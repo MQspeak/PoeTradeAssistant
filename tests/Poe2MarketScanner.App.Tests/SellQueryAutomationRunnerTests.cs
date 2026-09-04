@@ -11,6 +11,78 @@ namespace Poe2MarketScanner.App.Tests;
 
 public sealed class SellQueryAutomationRunnerTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_ReusesRecordedGoldWithoutReadingGoldRegion(bool enabled)
+    {
+        var profile = AppProfileFactory.CreateDefault();
+        profile.Automation.RecognizeGoldCost = enabled;
+        profile.QueryList.Items.Add("神聖石");
+        var goldCosts = new ScanGoldCostTable();
+        goldCosts.Record("神圣石", "250");
+        var reader = new SelectiveGoldReader();
+        var runner = new SellQueryAutomationRunner(new FakeInputAutomationRunner(), reader, new FakeQueryResultWriter());
+
+        var result = await runner.RunAsync(profile, CancellationToken.None, goldCosts);
+
+        Assert.Equal("250", result.Items[0].GoldCostNormalized);
+        Assert.Equal("ok", result.Items[0].Status);
+        Assert.Equal(0, reader.GoldReads);
+        Assert.Equal(5, reader.RatioReads);
+    }
+
+    [Fact]
+    public async Task RunAsync_RecognizesMissingGoldOnceAndReusesItWithinBatch()
+    {
+        var profile = AppProfileFactory.CreateDefault();
+        profile.QueryList.Items.Add("Example");
+        profile.QueryList.Items.Add("Example");
+        var goldCosts = new ScanGoldCostTable();
+        goldCosts.Record("Example", "invalid");
+        var reader = new SelectiveGoldReader();
+        var runner = new SellQueryAutomationRunner(new FakeInputAutomationRunner(), reader, new FakeQueryResultWriter());
+
+        var result = await runner.RunAsync(profile, CancellationToken.None, goldCosts);
+
+        Assert.All(result.Items, item => Assert.Equal("250", item.GoldCostNormalized));
+        Assert.Equal(1, reader.GoldReads);
+        Assert.Equal(9, reader.RatioReads);
+        Assert.True(goldCosts.TryGet("Example", out var cost));
+        Assert.Equal("250", cost);
+    }
+
+    [Theory]
+    [InlineData("0", true)]
+    [InlineData("", false)]
+    [InlineData("-1", false)]
+    [InlineData("abc250", false)]
+    public void GoldCostTable_OnlyAcceptsRecordedNonnegativeIntegers(string cost, bool expected)
+    {
+        var table = new ScanGoldCostTable();
+        table.Record("Example", cost);
+        Assert.Equal(expected, table.TryGet("Example", out _));
+    }
+
+    private sealed class SelectiveGoldReader : ISellQueryOcrReader
+    {
+        public int GoldReads { get; private set; }
+        public int RatioReads { get; private set; }
+        public SellQueryOcrResult Read(AppProfile profile) => throw new InvalidOperationException("Specify OCR regions.");
+        public SellQueryOcrResult Read(AppProfile profile, bool recognizeGoldCost, bool recognizeRatio)
+        {
+            Assert.NotEqual(recognizeGoldCost, recognizeRatio);
+            if (recognizeGoldCost) GoldReads++;
+            if (recognizeRatio) RatioReads++;
+            return new SellQueryOcrResult
+            {
+                Status = "ok",
+                GoldCostNormalized = recognizeGoldCost ? "250" : "",
+                RatioNormalized = recognizeRatio ? "1:120" : ""
+            };
+        }
+    }
+
     private const string ChaosBuyDivineSellMode = "\u6DF7\u6C8C\u77F3\u4E70\u795E\u5723\u77F3\u5356";
     private const string ChaosOrb = "\u6DF7\u6C8C\u77F3";
     private const string DivineOrb = "\u795E\u5723\u77F3";
@@ -151,7 +223,7 @@ public sealed class SellQueryAutomationRunnerTests
         Assert.Equal(string.Empty, result.Items[0].GoldCostNormalized);
         Assert.Equal("1:572", result.Items[0].BuyRatioNormalized);
         Assert.Equal("1:220", result.Items[0].SellRatioNormalized);
-        Assert.Equal(3, reader.ReadCount);
+        Assert.Equal(5, reader.ReadCount);
         Assert.DoesNotContain("Wait(200)", inputRunner.Steps);
     }
 }
@@ -230,6 +302,12 @@ internal sealed class SequencedFakeSellQueryOcrReader : ISellQueryOcrReader
                 Status = "ok"
             },
             3 => new SellQueryOcrResult
+            {
+                RatioRaw = "2 : 580",
+                RatioNormalized = "2:580",
+                Status = "ok"
+            },
+            4 => new SellQueryOcrResult
             {
                 RatioRaw = "1 : 572",
                 RatioNormalized = "1:572",
@@ -342,11 +420,17 @@ internal sealed class GoldRecognitionDisabledSellQueryOcrReader : ISellQueryOcrR
             },
             2 => new SellQueryOcrResult
             {
+                RatioRaw = "2 : 580",
+                RatioNormalized = "2:580",
+                Status = "ok"
+            },
+            3 => new SellQueryOcrResult
+            {
                 RatioRaw = "1 : 572",
                 RatioNormalized = "1:572",
                 Status = "ok"
             },
-            3 => new SellQueryOcrResult
+            4 or 5 => new SellQueryOcrResult
             {
                 RatioRaw = "1 : 220",
                 RatioNormalized = "1:220",

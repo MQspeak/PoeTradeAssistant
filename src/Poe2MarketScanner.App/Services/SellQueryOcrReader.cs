@@ -25,7 +25,9 @@ public sealed class SellQueryOcrReader : ISellQueryOcrReader, IDisposable
         };
     }
 
-    public SellQueryOcrResult Read(AppProfile profile)
+    public SellQueryOcrResult Read(AppProfile profile) => Read(profile, true, true);
+
+    public SellQueryOcrResult Read(AppProfile profile, bool recognizeGoldCost, bool recognizeRatio)
     {
         var debugDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -34,11 +36,14 @@ public sealed class SellQueryOcrReader : ISellQueryOcrReader, IDisposable
             DateTime.Now.ToString("yyyyMMdd-HHmmss"));
         Directory.CreateDirectory(debugDirectory);
 
-        var goldRead = ReadRegion(profile, "goldCost", profile.Regions["goldCost"], debugDirectory);
-        var ratioRead = ReadRegion(profile, "ratio", profile.Regions["ratio"], debugDirectory);
+        var goldRead = recognizeGoldCost
+            ? ReadRegion(profile, "goldCost", profile.Regions["goldCost"], debugDirectory) : new RegionReadResult();
+        var ratioRead = recognizeRatio
+            ? ReadRegion(profile, "ratio", profile.Regions["ratio"], debugDirectory) : new RegionReadResult();
 
         var goldParsed = OcrTextParser.ParseGoldCost(goldRead.RawText);
         var ratioParsed = OcrTextParser.ParseRatio(ratioRead.RawText);
+        var success = (!recognizeGoldCost || goldParsed.Success) && (!recognizeRatio || ratioParsed.Success);
 
         return new SellQueryOcrResult
         {
@@ -46,8 +51,8 @@ public sealed class SellQueryOcrReader : ISellQueryOcrReader, IDisposable
             GoldCostNormalized = goldParsed.NormalizedText,
             RatioRaw = ratioRead.RawText,
             RatioNormalized = ratioParsed.NormalizedText,
-            Status = goldParsed.Success && ratioParsed.Success ? "ok" : "parse_failed",
-            ErrorMessage = goldParsed.Success && ratioParsed.Success
+            Status = success ? "ok" : "parse_failed",
+            ErrorMessage = success
                 ? null
                 : $"gold={goldParsed.Status}; ratio={ratioParsed.Status}"
         };

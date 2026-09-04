@@ -18,6 +18,21 @@ public sealed class MainWindowTextTests
         Assert.Contains(">是否识别金币</TextBlock>", mainWindowXaml);
         Assert.Contains("Header=\"标的套利\"", mainWindowXaml);
         Assert.DoesNotContain("WebView2", mainWindowXaml);
+        Assert.Contains("CornerRadius=\"8,8,8,8\"", mainWindowXaml);
+        Assert.Contains("<StackPanel IsItemsHost=\"True\" Orientation=\"Vertical\" />", mainWindowXaml);
+    }
+
+    [Fact]
+    public void CalculatorComboBoxes_ShouldNotSynchronizeSharedCollectionSelections()
+    {
+        var root = FindRepositoryRoot();
+        var appXaml = File.ReadAllText(Path.Combine(root, "src", "Poe2MarketScanner.App", "App.xaml"));
+
+        Assert.Contains("<Setter Property=\"IsSynchronizedWithCurrentItem\" Value=\"False\" />", appXaml);
+        Assert.Contains("<Setter Property=\"HorizontalAlignment\" Value=\"Stretch\" />", appXaml);
+        Assert.Contains("Width=\"{Binding ActualWidth, ElementName=ToggleButton}\"", appXaml);
+        Assert.Contains("<Setter Property=\"HorizontalContentAlignment\" Value=\"Stretch\" />", appXaml);
+        Assert.Contains("HorizontalContentAlignment=\"Stretch\"", appXaml);
     }
 
     [Fact]

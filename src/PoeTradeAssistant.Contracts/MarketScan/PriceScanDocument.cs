@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace PoeTradeAssistant.Contracts.MarketScan;
 
@@ -40,11 +40,25 @@ public sealed record TradePairSnapshot
 
 public sealed record PriceScanItem
 {
+    [JsonPropertyName("priceObservations")]
+    public IReadOnlyDictionary<string, PriceObservation> PriceObservations { get; init; } = new Dictionary<string, PriceObservation>();
     [JsonPropertyName("name")]
     public string Name { get; init; } = string.Empty;
 
     [JsonPropertyName("goldCost")]
     public string GoldCost { get; init; } = string.Empty;
+
+    [JsonPropertyName("highestBuyPrice")]
+    public decimal? HighestBuyPrice { get; init; }
+
+    [JsonPropertyName("lowestBuyPrice")]
+    public decimal? LowestBuyPrice { get; init; }
+
+    [JsonPropertyName("highestSellPrice")]
+    public decimal? HighestSellPrice { get; init; }
+
+    [JsonPropertyName("lowestSellPrice")]
+    public decimal? LowestSellPrice { get; init; }
 
     [JsonPropertyName("buyRatio")]
     public NormalizedRatio BuyRatio { get; init; } = new();
@@ -60,6 +74,18 @@ public sealed record PriceScanItem
 
     [JsonPropertyName("capturedAt")]
     public DateTimeOffset CapturedAt { get; init; }
+}
+
+public sealed record PriceObservation
+{
+    [JsonPropertyName("raw")]
+    public string Raw { get; init; } = string.Empty;
+    [JsonPropertyName("normalized")]
+    public string Normalized { get; init; } = string.Empty;
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = "pending";
+    [JsonPropertyName("errorMessage")]
+    public string? ErrorMessage { get; init; }
 }
 
 public sealed record NormalizedRatio

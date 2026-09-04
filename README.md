@@ -20,7 +20,9 @@ dotnet test .\PoeTradeAssistant.sln
 dotnet build .\PoeTradeAssistant.sln -c Release
 ```
 
-## Windows 打包
+## Windows 发布
+
+打包需要 `global.json` 指定的 .NET SDK（当前为 10.0.400，允许同一主次版本中更高的功能版本），仅安装 .NET 6 或运行时无法编译。脚本会自动检查 `DOTNET_ROOT`、PATH、用户 SDK 目录以及本机临时工具目录中的兼容 SDK；自定义安装位置可通过 `DOTNET_ROOT` 指定。SDK 检查失败时不会清理已有发布文件。临时目录中的 SDK 若被清理，需要重新安装 SDK。
 
 双击项目根目录的 `打包发布.bat`，或在 PowerShell 中执行：
 
@@ -28,6 +30,8 @@ dotnet build .\PoeTradeAssistant.sln -c Release
 .\scripts\publish-win-x64.ps1
 ```
 
-脚本会生成自包含的 `artifacts\publish\win-x64\PoeTradeAssistant.exe` 及其运行依赖，并输出可分发的 `artifacts\PoeTradeAssistant-win-x64.zip`。请先完整解压 ZIP，再从解压后的文件夹启动 `PoeTradeAssistant.exe`；不要只单独复制 EXE。该方式携带 WPF UI、OCR 模型与本机运行库，不需要网页资源或 Microsoft Edge WebView2 Runtime。
+发布成功后，脚本会自动启动发布目录中的 `PoeTradeAssistant.exe`，并将该目录作为程序工作目录。若自动启动失败，会显示警告，已生成的发布文件仍可使用。再次发布前请先关闭该程序。
+
+脚本只生成自包含的 `artifacts\publish\win-x64\PoeTradeAssistant.exe` 及其运行依赖，不再生成 ZIP 文件。如需分发，请复制整个发布目录，不要只单独复制 EXE。该方式携带 WPF UI、OCR 模型与本机运行库，不需要网页资源或 Microsoft Edge WebView2 Runtime。
 
 旧的 `web/calculator` 目录只作为功能迁移参考，不会被编译、打包或在运行时加载；符文套利与公式套利将在后续原生页面中按相同的数据模型迁移。

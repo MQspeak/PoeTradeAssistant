@@ -26,7 +26,7 @@ public sealed class ProjectOutputJsonWriterTests
             var file = writer.WriteSellQueryBatch(new SellQueryBatchResult());
 
             Assert.StartsWith(Path.Combine(root, "output"), file);
-            Assert.EndsWith("20260625-010030.json", file);
+            Assert.EndsWith("20260625-010030.v2.json", file);
             Assert.True(File.Exists(file));
         }
         finally
@@ -56,10 +56,10 @@ public sealed class ProjectOutputJsonWriterTests
                         CurrencyName = "崇高石",
                         BuyCurrencyName = "混沌石",
                         SellCurrencyName = "神圣石",
-                        CurrentPairRatioNormalized = "1:120",
+                        CurrentPairRatioRaw = "1:120", CurrentPairRatioNormalized = "1:120",
                         GoldCostNormalized = "250",
-                        BuyRatioNormalized = "1:572",
-                        SellRatioNormalized = "1:220",
+                        BuyRatioRaw = "1:572", BuyRatioNormalized = "1:572",
+                        SellRatioRaw = "1:220", SellRatioNormalized = "1:220",
                         Status = "ok",
                         CapturedAt = new DateTimeOffset(2026, 6, 25, 1, 0, 31, TimeSpan.FromHours(8))
                     }
@@ -69,20 +69,20 @@ public sealed class ProjectOutputJsonWriterTests
             var json = File.ReadAllText(file);
             using var document = JsonDocument.Parse(json);
 
-            Assert.Equal("混沌石", document.RootElement.GetProperty("购买用通货").GetString());
-            Assert.Equal("神圣石", document.RootElement.GetProperty("出售目标通货").GetString());
-            Assert.Equal("1:120", document.RootElement.GetProperty("当前交易对比例").GetString());
+            Assert.Equal("C", document.RootElement.GetProperty("pair").GetProperty("buyCurrency").GetString());
+            Assert.Equal("D", document.RootElement.GetProperty("pair").GetProperty("sellCurrency").GetString());
+            Assert.Equal("1:120", document.RootElement.GetProperty("pair").GetProperty("currentRatio").GetProperty("raw").GetString());
 
-            var items = document.RootElement.GetProperty("条目");
+            var items = document.RootElement.GetProperty("items");
             Assert.Equal(JsonValueKind.Array, items.ValueKind);
             Assert.Single(items.EnumerateArray());
 
             var first = items[0];
-            Assert.Equal("崇高石", first.GetProperty("名字").GetString());
-            Assert.Equal("250", first.GetProperty("金币消耗").GetString());
-            Assert.Equal("1:572", first.GetProperty("买入比例").GetString());
-            Assert.Equal("1:220", first.GetProperty("卖出比例").GetString());
-            Assert.Equal(4, first.EnumerateObject().Count());
+            Assert.Equal("崇高石", first.GetProperty("name").GetString());
+            Assert.Equal("250", first.GetProperty("goldCost").GetString());
+            Assert.Equal("1:572", first.GetProperty("buyRatio").GetProperty("raw").GetString());
+            Assert.Equal("1:220", first.GetProperty("sellRatio").GetProperty("raw").GetString());
+            Assert.Equal("ok", first.GetProperty("status").GetString());
             Assert.DoesNotContain("\\u540D\\u5B57", json, StringComparison.Ordinal);
         }
         finally
@@ -117,7 +117,7 @@ public sealed class ProjectOutputJsonWriterTests
     }
 
     [Fact]
-    public void WriteSellQueryBatch_ShouldAlsoWriteVersionedV2Document()
+    public void WriteSellQueryBatch_ShouldWriteOnlyVersionedV2Document()
     {
         var root = Path.Combine(Path.GetTempPath(), $"poe2-output-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -128,7 +128,7 @@ public sealed class ProjectOutputJsonWriterTests
                 root,
                 () => new DateTimeOffset(2026, 9, 2, 12, 0, 0, TimeSpan.FromHours(8)));
 
-            var legacyFile = writer.WriteSellQueryBatch(new SellQueryBatchResult
+            var version2File = writer.WriteSellQueryBatch(new SellQueryBatchResult
             {
                 Mode = "exalted-to-divine",
                 FinishedAt = new DateTimeOffset(2026, 9, 2, 12, 0, 0, TimeSpan.FromHours(8)),
@@ -145,7 +145,7 @@ public sealed class ProjectOutputJsonWriterTests
                 }
             });
 
-            var version2File = Path.ChangeExtension(legacyFile, null) + ".v2.json";
+            Assert.Single(Directory.GetFiles(Path.GetDirectoryName(version2File)!, "*.json"));
             using var document = JsonDocument.Parse(File.ReadAllText(version2File));
 
             Assert.Equal(PriceScanDocument.CurrentSchemaVersion, document.RootElement.GetProperty("schemaVersion").GetString());

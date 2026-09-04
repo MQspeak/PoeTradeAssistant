@@ -42,6 +42,17 @@ public static class PriceScanDocumentAdapter
             {
                 Name = item.CurrencyName.Trim(),
                 GoldCost = item.GoldCostNormalized,
+                HighestBuyPrice = item.HighestBuyPrice,
+                LowestBuyPrice = item.LowestBuyPrice,
+                HighestSellPrice = item.HighestSellPrice,
+                LowestSellPrice = item.LowestSellPrice,
+                PriceObservations = item.PriceObservations.ToDictionary(entry => entry.Key, entry => new PriceObservation
+                {
+                    Raw = entry.Value.Raw,
+                    Normalized = entry.Value.Normalized,
+                    Status = entry.Value.Status,
+                    ErrorMessage = entry.Value.ErrorMessage
+                }),
                 BuyRatio = ParseRatio(item.BuyRatioRaw, item.BuyRatioNormalized),
                 SellRatio = ParseRatio(item.SellRatioRaw, item.SellRatioNormalized),
                 Status = string.IsNullOrWhiteSpace(item.Status) ? "unknown" : item.Status,

@@ -31,37 +31,7 @@ public sealed class ProjectOutputJsonWriter : IQueryResultWriter
         var outputDirectory = ResolveOutputDirectory();
         Directory.CreateDirectory(outputDirectory);
 
-        var fileName = $"{_now():yyyyMMdd-HHmmss}.json";
-        var outputPath = Path.Combine(outputDirectory, fileName);
-        var firstItem = result.Items.FirstOrDefault();
-        var payload = new
-        {
-            购买用通货 = firstItem?.BuyCurrencyName ?? string.Empty,
-            出售目标通货 = firstItem?.SellCurrencyName ?? string.Empty,
-            当前交易对比例 = firstItem?.CurrentPairRatioNormalized ?? string.Empty,
-            条目 = result.Items.Select(item => new
-            {
-                名字 = item.CurrencyName,
-                金币消耗 = item.GoldCostNormalized,
-                买入比例 = item.BuyRatioNormalized,
-                卖出比例 = item.SellRatioNormalized
-            })
-        };
-        var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        });
-
-        File.WriteAllText(outputPath, json);
-        WriteVersion2Document(result, outputDirectory, fileName);
-        return outputPath;
-    }
-
-    private static void WriteVersion2Document(SellQueryBatchResult result, string outputDirectory, string legacyFileName)
-    {
-        var version2FileName = Path.GetFileNameWithoutExtension(legacyFileName) + ".v2.json";
-        var version2Path = Path.Combine(outputDirectory, version2FileName);
+        var outputPath = Path.Combine(outputDirectory, $"{_now():yyyyMMdd-HHmmss}.v2.json");
         var document = PriceScanDocumentAdapter.FromScannerBatch(result);
         var json = JsonSerializer.Serialize(document, new JsonSerializerOptions
         {
@@ -70,7 +40,8 @@ public sealed class ProjectOutputJsonWriter : IQueryResultWriter
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         });
 
-        File.WriteAllText(version2Path, json);
+        File.WriteAllText(outputPath, json);
+        return outputPath;
     }
 
     private string ResolveOutputDirectory()

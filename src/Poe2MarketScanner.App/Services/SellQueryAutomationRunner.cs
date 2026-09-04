@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Poe2MarketScanner.Core.Automation;
 using Poe2MarketScanner.Core.Configuration;
+using Poe2MarketScanner.Core.Ocr;
 
 namespace Poe2MarketScanner.App.Services;
 
@@ -28,8 +29,10 @@ public sealed class SellQueryAutomationRunner
         _now = now ?? (() => DateTimeOffset.Now);
     }
 
-    public async Task<SellQueryBatchResult> RunAsync(AppProfile profile, CancellationToken cancellationToken)
+    public async Task<SellQueryBatchResult> RunAsync(AppProfile profile, CancellationToken cancellationToken,
+        ScanGoldCostTable? goldCosts = null)
     {
+        goldCosts ??= new ScanGoldCostTable();
         var queryItems = profile.QueryList.Items
             .Where(static item => !string.IsNullOrWhiteSpace(item))
             .ToList();
@@ -60,10 +63,13 @@ public sealed class SellQueryAutomationRunner
         }
 
         await CaptureCurrentPairRatioAsync(profile, mode, result, cancellationToken);
+        foreach (var item in result.Items)
+            foreach (var key in new[] { "highestBuyPrice", "lowestBuyPrice", "highestSellPrice", "lowestSellPrice" })
+                item.PriceObservations[key] = new ScanPriceObservation();
         await PrimeBuySideAsync(profile, mode, cancellationToken);
         foreach (var item in result.Items)
         {
-            await CaptureBuyAsync(profile, item, cancellationToken);
+            await CaptureBuyAsync(profile, item, goldCosts, cancellationToken);
         }
 
         await PrimeSellSideAsync(profile, mode, cancellationToken);
@@ -125,18 +131,25 @@ public sealed class SellQueryAutomationRunner
         await WaitAfterActionAsync(profile.Automation.ClickDelayMs * 2, profile, cancellationToken);
     }
 
-    private async Task CaptureBuyAsync(AppProfile profile, SellQueryItemResult item, CancellationToken cancellationToken)
+    private async Task CaptureBuyAsync(AppProfile profile, SellQueryItemResult item, ScanGoldCostTable goldCosts, CancellationToken cancellationToken)
     {
         try
         {
             await SearchCurrencyAsync(profile, "leftCurrency", item.CurrencyName, cancellationToken);
             await SetQuantityAsync(profile, "leftInput", cancellationToken);
             SellQueryOcrResult goldReadResult;
-            if (profile.Automation.RecognizeGoldCost)
+            if (goldCosts.TryGet(item.CurrencyName, out var recordedGoldCost))
             {
-                goldReadResult = await ReadUntilStableAsync(profile, cancellationToken);
+                goldReadResult = new SellQueryOcrResult { Status = "ok" };
+                item.GoldCostNormalized = recordedGoldCost;
+            }
+            else if (profile.Automation.RecognizeGoldCost)
+            {
+                goldReadResult = await ReadUntilStableAsync(profile, cancellationToken, recognizeGoldCost: true);
                 item.GoldCostRaw = goldReadResult.GoldCostRaw;
                 item.GoldCostNormalized = goldReadResult.GoldCostNormalized;
+                if (string.Equals(goldReadResult.Status, "ok", StringComparison.OrdinalIgnoreCase))
+                    goldCosts.Record(item.CurrencyName, item.GoldCostNormalized);
             }
             else
             {
@@ -148,28 +161,25 @@ public sealed class SellQueryAutomationRunner
                 item.GoldCostNormalized = string.Empty;
             }
 
-            await CtrlClickAnchorAsync(profile, "leftCurrency", cancellationToken);
-            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
-            await ClickAnchorAsync(profile, "idle", cancellationToken);
-            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
-            var ratioReadResult = await ReadUntilStableAsync(profile, cancellationToken);
-            await CtrlClickAnchorAsync(profile, "leftCurrency", cancellationToken);
-            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+            var highestRead = await ReadUntilStableAsync(profile, cancellationToken);
+            item.HighestBuyPrice = RecordPrice(item, "highestBuyPrice", highestRead, takeLeft: false);
+            var ratioReadResult = await ReadSwappedRatioAsync(profile, cancellationToken);
+            item.LowestBuyPrice = RecordPrice(item, "lowestBuyPrice", ratioReadResult, takeLeft: true);
 
             item.BuyRatioRaw = ratioReadResult.RatioRaw;
             item.BuyRatioNormalized = ratioReadResult.RatioNormalized;
             item.CapturedAt = _now();
             item.Status = string.Equals(goldReadResult.Status, "ok", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(ratioReadResult.Status, "ok", StringComparison.OrdinalIgnoreCase)
+                item.HighestBuyPrice.HasValue && item.LowestBuyPrice.HasValue
                 ? "ok"
                 : !string.Equals(goldReadResult.Status, "ok", StringComparison.OrdinalIgnoreCase)
                     ? goldReadResult.Status
-                    : ratioReadResult.Status;
+                    : "parse_failed";
             item.ErrorMessage = !string.IsNullOrWhiteSpace(goldReadResult.ErrorMessage)
                 ? goldReadResult.ErrorMessage
-                : ratioReadResult.ErrorMessage;
+                : highestRead.ErrorMessage ?? ratioReadResult.ErrorMessage;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException && exception is not CurrencySwapException)
         {
             item.Status = "failed";
             item.ErrorMessage = exception.Message;
@@ -184,15 +194,18 @@ public sealed class SellQueryAutomationRunner
             await SearchCurrencyAsync(profile, "leftCurrency", item.CurrencyName, cancellationToken);
             await SetQuantityAsync(profile, "leftInput", cancellationToken);
             var readResult = await ReadUntilStableAsync(profile, cancellationToken);
+            item.HighestSellPrice = RecordPrice(item, "highestSellPrice", readResult, takeLeft: false);
+            var lowestRead = await ReadSwappedRatioAsync(profile, cancellationToken);
+            item.LowestSellPrice = RecordPrice(item, "lowestSellPrice", lowestRead, takeLeft: true);
 
             item.SellRatioRaw = readResult.RatioRaw;
             item.SellRatioNormalized = readResult.RatioNormalized;
             item.CapturedAt = _now();
 
-            if (!string.Equals(readResult.Status, "ok", StringComparison.OrdinalIgnoreCase))
+            if (!item.HighestSellPrice.HasValue || !item.LowestSellPrice.HasValue)
             {
-                item.Status = readResult.Status;
-                item.ErrorMessage = readResult.ErrorMessage;
+                item.Status = "parse_failed";
+                item.ErrorMessage = readResult.ErrorMessage ?? lowestRead.ErrorMessage;
                 return;
             }
 
@@ -205,12 +218,64 @@ public sealed class SellQueryAutomationRunner
             item.Status = "ok";
             item.ErrorMessage = null;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException && exception is not CurrencySwapException)
         {
             item.Status = "failed";
             item.ErrorMessage = exception.Message;
             item.CapturedAt = _now();
         }
+    }
+
+    private static decimal? RecordPrice(SellQueryItemResult item, string key, SellQueryOcrResult read, bool takeLeft)
+    {
+        var parsed = OcrTextParser.ParseRatio(read.RatioNormalized);
+        var success = read.Status == "ok" && parsed.Success && parsed.RatioLeft > 0 && parsed.RatioRight > 0;
+        item.PriceObservations[key] = new ScanPriceObservation
+        {
+            Raw = read.RatioRaw,
+            Normalized = read.RatioNormalized,
+            Status = success ? "ok" : read.Status == "ok" ? "parse_failed" : read.Status,
+            ErrorMessage = success ? null : read.ErrorMessage ?? "invalid_price_ratio"
+        };
+        // M:N is interpreted by currency position, not by division or inversion.
+        return success ? (takeLeft ? parsed.RatioLeft : parsed.RatioRight) : null;
+    }
+
+    private async Task<SellQueryOcrResult> ReadSwappedRatioAsync(AppProfile profile, CancellationToken cancellationToken)
+    {
+        await SwapCurrenciesAsync(profile, cancellationToken);
+        try
+        {
+            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+            await ClickAnchorAsync(profile, "idle", cancellationToken);
+            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
+            return await ReadUntilStableAsync(profile, cancellationToken);
+        }
+        finally
+        {
+            // A completed swap is always undone, even when OCR fails or the user stops.
+            await SwapCurrenciesAsync(profile, CancellationToken.None);
+            await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, CancellationToken.None);
+        }
+    }
+
+    private async Task SwapCurrenciesAsync(AppProfile profile, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            // Do not interrupt a key-down/mouse-click/key-up sequence halfway through.
+            await CtrlClickAnchorAsync(profile, "leftCurrency", CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            throw new CurrencySwapException("通货对调操作失败，已停止扫描，请检查两侧通货位置。", exception);
+        }
+    }
+
+    private sealed class CurrencySwapException : Exception
+    {
+        public CurrencySwapException(string message, Exception inner) : base(message, inner) { }
     }
 
     private async Task SearchCurrencyAsync(
@@ -254,7 +319,8 @@ public sealed class SellQueryAutomationRunner
         await WaitAfterActionAsync(profile.Automation.ClickDelayMs, profile, cancellationToken);
     }
 
-    private async Task<SellQueryOcrResult> ReadUntilStableAsync(AppProfile profile, CancellationToken cancellationToken)
+    private async Task<SellQueryOcrResult> ReadUntilStableAsync(AppProfile profile, CancellationToken cancellationToken,
+        bool recognizeGoldCost = false)
     {
         SellQueryOcrResult? lastResult = null;
 
@@ -263,7 +329,7 @@ public sealed class SellQueryAutomationRunner
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                lastResult = _ocrReader.Read(profile);
+                lastResult = _ocrReader.Read(profile, recognizeGoldCost, recognizeRatio: !recognizeGoldCost);
             }
             catch (Exception exception)
             {
