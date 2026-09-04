@@ -70,7 +70,7 @@
                                 </TabControl>
                             </StackPanel></ScrollViewer>
                         </TabItem>
-                        <TabItem Header="实时搜索"><views:LiveSearchView x:Name="LiveSearch" /></TabItem>
+                        <TabItem><TabItem.Header><Grid Width="184"><Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Border Width="32" Height="32" HorizontalAlignment="Left" VerticalAlignment="Center" Background="#26344A" CornerRadius="7"><ui:SymbolIcon Symbol="GlobeSearch24" FontSize="18" Foreground="{StaticResource AppAccentHoverBrush}" /></Border><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock FontSize="15" FontWeight="SemiBold" Text="实时搜索" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,3,0,0" FontSize="11" Text="监控与命中" /></StackPanel></Grid></TabItem.Header><views:LiveSearchView x:Name="LiveSearch" /></TabItem>
                     </TabControl>
                 </DockPanel>
         </Border>
