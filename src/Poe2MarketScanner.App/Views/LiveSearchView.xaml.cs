@@ -71,7 +71,7 @@ public partial class LiveSearchView : UserControl
         try
         {
             foreach (var link in _storage.Load(_environment).Links) _links.Add(link);
-            StatusText.Text = "工作区已加载。连接已开放调试端口的本地浏览器，验证后再启动监控。";
+            StatusText.Text = "工作区已加载。点击“一键启动 / 连接”，登录并验证后即可启动监控。";
             Editor.IsEnabled = LinkActions.IsEnabled = true;
         }
         catch (Exception error)

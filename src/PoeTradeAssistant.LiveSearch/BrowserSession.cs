@@ -74,6 +74,7 @@ public sealed class BrowserSession : IAsyncDisposable
             else
             {
                 var endpoint = LocalBrowserConnection.Endpoint;
+                var launchedRuntime = await LocalBrowserConnection.EnsureAvailableAsync(dataDirectory);
                 try
                 {
                     _browser = await _playwright.Chromium.ConnectOverCDPAsync(endpoint, new() { Timeout = 10000 });
@@ -84,7 +85,9 @@ public sealed class BrowserSession : IAsyncDisposable
                 }
                 _context = _browser.Contexts.FirstOrDefault() ?? throw new InvalidOperationException(
                     "本地浏览器没有可连接的上下文，请确认调试实例已经打开一个窗口。");
-                _runtime = new("cdp", "本地 Chrome/Edge 实例", endpoint);
+                _runtime = launchedRuntime is null
+                    ? new("cdp", "已运行的本地 Chrome/Edge", endpoint)
+                    : launchedRuntime with { Label = launchedRuntime.Label + "（本机）" };
                 _browser.Disconnected += (_, _) =>
                 {
                     _validated = false;
