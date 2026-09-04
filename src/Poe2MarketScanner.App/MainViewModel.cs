@@ -44,6 +44,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public Func<bool>? CanSwitchGame { get; set; }
     public event EventHandler? LayoutChanged;
 
     public string ProfilePath => GetProfilePath(SelectedGameMode);
@@ -69,6 +70,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             if (_selectedGameMode == value)
             {
+                return;
+            }
+
+            if (CanSwitchGame is not null && !CanSwitchGame())
+            {
+                OnPropertyChanged(nameof(IsPoe1Mode));
+                OnPropertyChanged(nameof(IsPoe2Mode));
                 return;
             }
 

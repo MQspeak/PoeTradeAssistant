@@ -4,6 +4,7 @@
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <ProjectReference Include="..\Poe2MarketScanner.Core\Poe2MarketScanner.Core.csproj" />
     <ProjectReference Include="..\PoeTradeAssistant.ScannerIntegration\PoeTradeAssistant.ScannerIntegration.csproj" />
+    <ProjectReference Include="..\PoeTradeAssistant.LiveSearch\PoeTradeAssistant.LiveSearch.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +20,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <PlaywrightPlatform>win</PlaywrightPlatform>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>

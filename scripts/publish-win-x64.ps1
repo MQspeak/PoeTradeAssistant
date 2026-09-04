@@ -1,8 +1,9 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('win-x64', 'win-arm64')]
+    [ValidateSet('win-x64')]
     [string]$RuntimeIdentifier = 'win-x64',
-    [switch]$KeepExistingPublishOutput
+    [switch]$KeepExistingPublishOutput,
+    [switch]$SkipLaunch
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,6 +111,7 @@ Invoke-DotNet @(
     '--no-restore',
     '--output', $publishDirectory,
     '-p:PublishSingleFile=false',
+    '-p:PlaywrightPlatform=win',
     '-p:DebugType=None',
     '-p:DebugSymbols=false'
 )
@@ -119,9 +121,33 @@ if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
     throw "Publish completed but the executable was not found: $executablePath"
 }
 
+Write-Host 'Installing the matching full Chromium into the portable application...'
+$driverPlatform = if ($RuntimeIdentifier -eq 'win-arm64') { 'win32_arm64' } else { 'win32_x64' }
+$driverNode = Join-Path $publishDirectory ".playwright/node/$driverPlatform/node.exe"
+$driverCli = Join-Path $publishDirectory '.playwright/package/cli.js'
+if (-not (Test-Path -LiteralPath $driverNode) -or -not (Test-Path -LiteralPath $driverCli)) {
+    throw 'The Playwright driver was not published. Publish is incomplete.'
+}
+$previousBrowserPath = $env:PLAYWRIGHT_BROWSERS_PATH
+$previousDownloadTimeout = $env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT
+try {
+    $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $publishDirectory 'browsers'
+    $env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT = '180000'
+    & $driverNode $driverCli install chromium --no-shell
+    if ($LASTEXITCODE -ne 0) { throw "Chromium installation failed (exit $LASTEXITCODE). Publish is incomplete." }
+}
+finally {
+    $env:PLAYWRIGHT_BROWSERS_PATH = $previousBrowserPath
+    $env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT = $previousDownloadTimeout
+}
+$browserExecutables = @(Get-ChildItem -LiteralPath (Join-Path $publishDirectory 'browsers') -Filter chrome.exe -File -Recurse)
+if ($browserExecutables.Count -eq 0) { throw 'Full Chromium was not included. Publish is incomplete.' }
+
 Write-Host ''
 Write-Host 'Publish completed successfully.' -ForegroundColor Green
 Write-Host "Executable: $executablePath"
+
+if ($SkipLaunch) { return }
 
 Write-Host 'Starting the published application...' -ForegroundColor Cyan
 try {

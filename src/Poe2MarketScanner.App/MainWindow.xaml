@@ -2,7 +2,7 @@
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-                 xmlns:calculator="clr-namespace:Poe2MarketScanner.App.Services"
+                 xmlns:calculator="clr-namespace:Poe2MarketScanner.App.Services" xmlns:views="clr-namespace:Poe2MarketScanner.App.Views"
                  Title="POE 交易助手" Width="1480" MinWidth="1120" Height="920" MinHeight="700"
                  Background="{StaticResource AppBackgroundBrush}" Foreground="{StaticResource AppTextBrush}"
                  ExtendsContentIntoTitleBar="True" WindowBackdropType="Mica">
@@ -34,7 +34,7 @@
 
         <Border Grid.Column="0" Grid.RowSpan="2" Background="#111722" BorderBrush="#29364A" BorderThickness="0,0,1,0">
                 <DockPanel Margin="16">
-                    <StackPanel DockPanel.Dock="Top" Margin="0,14,0,24"><TextBlock FontSize="20" FontWeight="SemiBold" Text="POE 交易助手" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,6,0,0" Text="市场扫描与套利决策" /><Border Margin="0,20,0,2" Padding="12" Background="#182131" BorderBrush="#2D3C55" BorderThickness="1" CornerRadius="8"><StackPanel><TextBlock Style="{StaticResource SectionCaption}" Text="游戏工作区" /><StackPanel Margin="0,10,0,0" Orientation="Horizontal"><RadioButton GroupName="GameMode" IsChecked="{Binding IsPoe1Mode, Mode=TwoWay}" FontWeight="SemiBold">POE1</RadioButton><RadioButton GroupName="GameMode" IsChecked="{Binding IsPoe2Mode, Mode=TwoWay}" Margin="18,0,0,0" FontWeight="SemiBold">POE2</RadioButton></StackPanel><Border Height="1" Margin="0,12,0,10" Background="#2D3C55" /><TextBlock FontWeight="SemiBold" Foreground="{StaticResource AppSuccessBrush}" Text="{Binding ActiveGameDisplayName, StringFormat={}{0} 工作区已启用}" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,5,0,0" Text="扫描配置与计算数据独立保存" TextWrapping="Wrap" /></StackPanel></Border><TextBlock Style="{StaticResource SectionCaption}" Margin="0,18,0,4" Text="功能" /></StackPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,14,0,24"><TextBlock FontSize="20" FontWeight="SemiBold" Text="POE 交易助手" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,6,0,0" Text="市场扫描与套利决策" /><Border Margin="0,20,0,2" Padding="12" Background="#182131" BorderBrush="#2D3C55" BorderThickness="1" CornerRadius="8"><StackPanel><TextBlock Style="{StaticResource SectionCaption}" Text="游戏工作区" /><StackPanel x:Name="GameModeSelector" Margin="0,10,0,0" Orientation="Horizontal"><RadioButton GroupName="GameMode" IsChecked="{Binding IsPoe1Mode, Mode=TwoWay}" FontWeight="SemiBold">POE1</RadioButton><RadioButton GroupName="GameMode" IsChecked="{Binding IsPoe2Mode, Mode=TwoWay}" Margin="18,0,0,0" FontWeight="SemiBold">POE2</RadioButton></StackPanel><Border Height="1" Margin="0,12,0,10" Background="#2D3C55" /><TextBlock FontWeight="SemiBold" Foreground="{StaticResource AppSuccessBrush}" Text="{Binding ActiveGameDisplayName, StringFormat={}{0} 工作区已启用}" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,5,0,0" Text="扫描配置与计算数据独立保存" TextWrapping="Wrap" /></StackPanel></Border><TextBlock Style="{StaticResource SectionCaption}" Margin="0,18,0,4" Text="功能" /></StackPanel>
                     <TabControl x:Name="PrimaryNavigation" TabStripPlacement="Left" Style="{StaticResource SidebarTabControl}" ItemContainerStyle="{StaticResource SidebarTabItem}">
                         <TabItem><TabItem.Header><Grid Width="184"><Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Border Width="32" Height="32" HorizontalAlignment="Left" VerticalAlignment="Center" Background="#26344A" CornerRadius="7"><ui:SymbolIcon Symbol="Search24" FontSize="18" Foreground="{StaticResource AppAccentHoverBrush}" /></Border><StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock FontSize="15" FontWeight="SemiBold" Text="扫价器" /><TextBlock Style="{StaticResource SectionCaption}" Margin="0,3,0,0" FontSize="11" Text="扫描与 OCR" /></StackPanel></Grid></TabItem.Header>
                             <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="32,28,32,40">
@@ -70,6 +70,7 @@
                                 </TabControl>
                             </StackPanel></ScrollViewer>
                         </TabItem>
+                        <TabItem Header="实时搜索"><views:LiveSearchView x:Name="LiveSearch" /></TabItem>
                     </TabControl>
                 </DockPanel>
         </Border>

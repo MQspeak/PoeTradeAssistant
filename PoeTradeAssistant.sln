@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30114.105
@@ -21,13 +21,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Poe2MarketScanner.Core.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Poe2MarketScanner.App.Tests", "tests\Poe2MarketScanner.App.Tests\Poe2MarketScanner.App.Tests.csproj", "{4F972ED9-731F-4C96-9DB3-116B23863D16}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PoeTradeAssistant.LiveSearch", "src\PoeTradeAssistant.LiveSearch\PoeTradeAssistant.LiveSearch.csproj", "{B8387400-A274-489F-B5F0-3002F2D2FC20}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{0E0C59C8-9956-4B17-BC91-97A6188C3B29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -58,6 +57,13 @@ Global
 		{4F972ED9-731F-4C96-9DB3-116B23863D16}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4F972ED9-731F-4C96-9DB3-116B23863D16}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4F972ED9-731F-4C96-9DB3-116B23863D16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8387400-A274-489F-B5F0-3002F2D2FC20}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8387400-A274-489F-B5F0-3002F2D2FC20}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8387400-A274-489F-B5F0-3002F2D2FC20}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8387400-A274-489F-B5F0-3002F2D2FC20}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{0E0C59C8-9956-4B17-BC91-97A6188C3B29} = {18F12B21-F806-41F0-9BBD-785A709E6E0E}
@@ -67,5 +73,6 @@ Global
 		{489ADC44-1470-4936-9345-2D38C13DAD95} = {18F12B21-F806-41F0-9BBD-785A709E6E0E}
 		{7E28F7E2-FFB2-4B25-9023-E18FE8C441E6} = {0D42D4BA-0729-4425-9582-73EAF43DDDB0}
 		{4F972ED9-731F-4C96-9DB3-116B23863D16} = {0D42D4BA-0729-4425-9582-73EAF43DDDB0}
+		{B8387400-A274-489F-B5F0-3002F2D2FC20} = {18F12B21-F806-41F0-9BBD-785A709E6E0E}
 	EndGlobalSection
 EndGlobal

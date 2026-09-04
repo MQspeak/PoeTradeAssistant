@@ -34,6 +34,14 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
         _viewModel = new MainViewModel(new JsonProfileStorageService(GetCurrentScreenMetrics));
         _viewModel.Load();
         DataContext = _viewModel;
+        _viewModel.CanSwitchGame = () => !_isClosing && _automationCancellation is null && LiveSearch.CanSwitchGame;
+        LiveSearch.SetGame(_viewModel.IsPoe1Mode ? "poe1" : "poe2");
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.SelectedGameMode))
+                LiveSearch.SetGame(_viewModel.IsPoe1Mode ? "poe1" : "poe2");
+        };
+        LiveSearch.AvailabilityChanged += () => GameModeSelector.IsEnabled = LiveSearch.CanSwitchGame && _automationCancellation is null;
     }
 
     public bool IsOverlayVisible => _overlayWindow?.IsVisible == true;
@@ -70,6 +78,8 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
             _automationCancellation?.Cancel();
             await automationFinished;
             await (_calculatorImportCompletion?.Task ?? Task.CompletedTask);
+            ShutdownStatusText.Text = "正在关闭实时搜索浏览器…";
+            await LiveSearch.ShutdownAsync();
             ShutdownStatusText.Text = "正在保存所有工作区的数据、配置和设置，完成后将自动退出。";
             await Dispatcher.Yield(DispatcherPriority.Background);
             await _viewModel.SaveAllWorkspacesAsync();
@@ -79,6 +89,7 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
         catch (Exception exception)
         {
             _isClosing = false;
+            LiveSearch.ResumeAfterFailedShutdown();
             _closeApproved = false;
             ShutdownOverlay.Visibility = Visibility.Collapsed;
             ApplicationContent.IsEnabled = true;
@@ -162,6 +173,12 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
         if (_isClosing || _automationCancellation is not null)
             return;
 
+        if (!LiveSearch.CanSwitchGame)
+        {
+            MessageBox.Show(this, "请先在实时搜索页关闭浏览器会话，再开始扫价。", "浏览器会话仍在使用中");
+            return;
+        }
+
         var startError = AutomationPreflightValidator.ValidateStartRequirements(_viewModel.Profile, _viewModel.QueryItems.Count)
             ?? AutomationPreflightValidator.Validate(_viewModel.Profile);
         if (startError is not null)
@@ -176,6 +193,8 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
         _automationCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         RunAutomationButton.IsEnabled = false;
         StopAutomationButton.IsEnabled = true;
+        LiveSearch.SetScanning(true);
+        GameModeSelector.IsEnabled = false;
 
         var captureGuard = new OverlayCaptureGuard(this);
         try
@@ -215,6 +234,8 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
             StopAutomationButton.IsEnabled = false;
             _automationCancellation?.Dispose();
             _automationCancellation = null;
+            LiveSearch.SetScanning(false);
+            GameModeSelector.IsEnabled = LiveSearch.CanSwitchGame;
             _automationCompletion?.TrySetResult();
         }
     }
