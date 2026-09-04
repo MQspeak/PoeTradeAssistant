@@ -1,6 +1,6 @@
 # PoeTradeAssistant
 
-当前开发分支已接入“实时搜索 · Chromium 试用版”，使用随包完整 Chromium。功能范围、运行步骤及验证边界见 [试用说明](docs/live-search-preview.md)。以下关于无浏览器依赖的描述仅适用于扫描器和原生计算器；完整试用包还需携带 `browsers` 与 `.playwright` 目录。
+当前开发分支已接入“实时搜索 · 系统浏览器试用版”，优先使用本机 Google Chrome，缺失时回退 Microsoft Edge。功能范围、运行步骤及验证边界见 [试用说明](docs/live-search-preview.md)。以下关于无浏览器依赖的描述仅适用于扫描器和原生计算器；监控模块仍会携带 Playwright 的 Windows 驱动。
 
 统一 POE 交易辅助项目的实施根目录。扫描器、计算器、测试与合并代码均位于本目录；原始两个项目保留为未改动的历史副本。
 

@@ -121,27 +121,11 @@ if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
     throw "Publish completed but the executable was not found: $executablePath"
 }
 
-Write-Host 'Installing the matching full Chromium into the portable application...'
-$driverPlatform = if ($RuntimeIdentifier -eq 'win-arm64') { 'win32_arm64' } else { 'win32_x64' }
-$driverNode = Join-Path $publishDirectory ".playwright/node/$driverPlatform/node.exe"
-$driverCli = Join-Path $publishDirectory '.playwright/package/cli.js'
-if (-not (Test-Path -LiteralPath $driverNode) -or -not (Test-Path -LiteralPath $driverCli)) {
+Write-Host 'Verifying the Windows Playwright driver...'
+$driverNode = Join-Path $publishDirectory '.playwright/node/win32_x64/node.exe'
+if (-not (Test-Path -LiteralPath $driverNode)) {
     throw 'The Playwright driver was not published. Publish is incomplete.'
 }
-$previousBrowserPath = $env:PLAYWRIGHT_BROWSERS_PATH
-$previousDownloadTimeout = $env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT
-try {
-    $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $publishDirectory 'browsers'
-    $env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT = '180000'
-    & $driverNode $driverCli install chromium --no-shell
-    if ($LASTEXITCODE -ne 0) { throw "Chromium installation failed (exit $LASTEXITCODE). Publish is incomplete." }
-}
-finally {
-    $env:PLAYWRIGHT_BROWSERS_PATH = $previousBrowserPath
-    $env:PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT = $previousDownloadTimeout
-}
-$browserExecutables = @(Get-ChildItem -LiteralPath (Join-Path $publishDirectory 'browsers') -Filter chrome.exe -File -Recurse)
-if ($browserExecutables.Count -eq 0) { throw 'Full Chromium was not included. Publish is incomplete.' }
 
 Write-Host ''
 Write-Host 'Publish completed successfully.' -ForegroundColor Green

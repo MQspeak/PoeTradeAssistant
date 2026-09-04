@@ -23,7 +23,9 @@ public sealed class BrowserSession : IAsyncDisposable
     private Task _captureTask = Task.CompletedTask;
     private long _generation;
     private bool _validated;
+    private SystemBrowserRuntime? _runtime;
     public bool IsOpen => _context is not null;
+    public string BrowserLabel => _runtime?.Label ?? "系统浏览器";
     public event Action<SearchHit>? Hit;
     public event Action<string>? Status;
     public static string CardsScript { get; } = ReadScript("cards.js");
@@ -35,13 +37,6 @@ public sealed class BrowserSession : IAsyncDisposable
         return reader.ReadToEnd();
     }
 
-    public static void ConfigureBundledBrowser()
-    {
-        // Release always uses its own browser; development may use an explicitly configured cache.
-        var bundled = Path.Combine(AppContext.BaseDirectory, "browsers");
-        if (Directory.Exists(bundled)) Environment.SetEnvironmentVariable("PLAYWRIGHT_BROWSERS_PATH", bundled);
-    }
-
     public async Task OpenLoginAsync(TradeEnvironment environment, string dataDirectory)
     {
         environment.Validate();
@@ -51,14 +46,15 @@ public sealed class BrowserSession : IAsyncDisposable
             await _loginPage.BringToFrontAsync();
             return;
         }
-        ConfigureBundledBrowser();
+        _runtime = SystemBrowserLocator.Resolve();
         _playwright = await Playwright.CreateAsync();
         try
         {
             Directory.CreateDirectory(dataDirectory);
-            _context = await _playwright.Chromium.LaunchPersistentContextAsync(Path.Combine(dataDirectory, "browser-profile"), new()
+            _context = await _playwright.Chromium.LaunchPersistentContextAsync(
+                Path.Combine(dataDirectory, "browser-profile-" + _runtime.Channel), new()
             {
-                Headless = _headless, Channel = "chromium", Timeout = 30000,
+                Headless = _headless, Channel = _runtime.Channel, Timeout = 30000,
                 ViewportSize = new() { Width = 1440, Height = 900 }
             });
             _validated = false;
@@ -66,7 +62,7 @@ public sealed class BrowserSession : IAsyncDisposable
             _context.Close += (_, _) => { _validated = false; Status?.Invoke("浏览器已关闭，请先关闭会话，再重新登录。"); };
             _loginPage = _context.Pages.FirstOrDefault() ?? await _context.NewPageAsync();
             await _loginPage.GotoAsync(environment.HomeUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
-            Status?.Invoke("请在 Chromium 中完成登录，再点击“验证登录”。浏览器可手动最小化。");
+            Status?.Invoke($"已打开 {_runtime.Label}。请完成登录，再点击“验证登录”；浏览器可手动最小化。");
         }
         catch { await CloseAsync(); throw; }
     }
@@ -249,6 +245,7 @@ public sealed class BrowserSession : IAsyncDisposable
         _pages.Clear();
         _loginPage = null;
         _context = null;
+        _runtime = null;
         _playwright?.Dispose();
         _playwright = null;
     }

@@ -2,10 +2,9 @@ using Microsoft.Playwright;
 using PoeTradeAssistant.LiveSearch;
 using System.Text.Json;
 
-if (args.Length != 1 || !Directory.Exists(args[0])) throw new ArgumentException("Pass the published browsers directory.");
-Environment.SetEnvironmentVariable("PLAYWRIGHT_BROWSERS_PATH", Path.GetFullPath(args[0]));
+var runtime = SystemBrowserLocator.Resolve();
 using var playwright = await Playwright.CreateAsync();
-await using var browser = await playwright.Chromium.LaunchAsync(new() { Channel = "chromium", Headless = true });
+await using var browser = await playwright.Chromium.LaunchAsync(new() { Channel = runtime.Channel, Headless = true });
 var page = await browser.NewPageAsync();
 await page.SetContentAsync("""
     <div class="search-results"><div class="row" data-id="item1">
@@ -22,7 +21,7 @@ if (cards.GetArrayLength() != 1 || cards[0].GetProperty("title").GetString() != 
 await page.EvaluateAsync("() => document.querySelector('.search-results').insertAdjacentHTML('beforeend', '<div class=\"row\" data-id=\"item2\"><div class=\"itemName\">新物品</div><div class=\"price\">询价 2 divine</div><button disabled class=\"direct-btn\">前往藏身处</button></div>')");
 cards = await page.EvaluateAsync<JsonElement>(BrowserSession.CardsScript);
 if (cards.GetArrayLength() != 2 || cards[1].GetProperty("canTravel").GetBoolean()) throw new Exception("Update or disabled-action extraction failed.");
-Console.WriteLine($"PASS: full Chromium {browser.Version}; English/Chinese cards, updates, details, disabled actions.");
+Console.WriteLine($"PASS: system {runtime.Label} {browser.Version}; English/Chinese cards, updates, details, disabled actions.");
 await browser.CloseAsync();
 if (browser.IsConnected) throw new Exception("Browser did not close.");
 Console.WriteLine("PASS: browser shutdown.");

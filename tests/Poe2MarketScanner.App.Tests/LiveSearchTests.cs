@@ -59,4 +59,13 @@ public sealed class LiveSearchTests
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
+
+    [Fact]
+    public void BrowserLocatorPrefersChromeAndFallsBackToEdge()
+    {
+        Assert.Equal("chrome", SystemBrowserLocator.Resolve(null, path => path.EndsWith("chrome.exe", StringComparison.OrdinalIgnoreCase))!.Channel);
+        Assert.Equal("msedge", SystemBrowserLocator.Resolve(null, path => path.EndsWith("msedge.exe", StringComparison.OrdinalIgnoreCase))!.Channel);
+        Assert.Equal("msedge", SystemBrowserLocator.Resolve("msedge", _ => true)!.Channel);
+        Assert.Null(SystemBrowserLocator.Resolve(null, _ => false));
+    }
 }
