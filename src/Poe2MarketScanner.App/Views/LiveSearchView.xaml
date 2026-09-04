@@ -21,13 +21,13 @@
  <Grid Margin="28">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="2*"/><RowDefinition Height="3*"/></Grid.RowDefinitions>
   <StackPanel>
-   <TextBlock Text="实时搜索 · 系统浏览器试用版" FontSize="26" FontWeight="SemiBold"/>
+   <TextBlock Text="实时搜索 · 本地浏览器实例" FontSize="26" FontWeight="SemiBold"/>
    <TextBlock x:Name="EnvironmentText" Margin="0,8,0,8"/>
-   <TextBlock Text="优先使用 Chrome，缺失时使用 Edge。首屏结果仅展示；后续新命中播放提示音。" Foreground="{StaticResource AppMutedTextBrush}"/>
+   <TextBlock Text="连接 127.0.0.1:9222 的 Chrome/Edge，复用该实例登录态。首屏结果仅展示；后续新命中播放提示音。" Foreground="{StaticResource AppMutedTextBrush}"/>
   </StackPanel>
   <WrapPanel Grid.Row="1" Margin="0,16,0,8" x:Name="Actions">
    <ComboBox x:Name="RegionPicker" Width="110" SelectedIndex="0" SelectionChanged="RegionChanged"><ComboBoxItem Content="国际服"/><ComboBoxItem Content="国服"/></ComboBox>
-   <Button Margin="8,0,0,0" Click="Login_Click">打开登录</Button>
+   <Button Margin="8,0,0,0" Click="Login_Click">连接本地浏览器</Button>
    <Button Margin="8,0,0,0" Click="Validate_Click">验证登录</Button>
    <Button Margin="8,0,0,0" Click="Start_Click">启动 / 全部重连</Button>
    <Button Margin="8,0,0,0" Click="Pause_Click">暂停采集</Button>

@@ -68,4 +68,18 @@ public sealed class LiveSearchTests
         Assert.Equal("msedge", SystemBrowserLocator.Resolve("msedge", _ => true)!.Channel);
         Assert.Null(SystemBrowserLocator.Resolve(null, _ => false));
     }
+
+    [Fact]
+    public void LocalBrowserConnectionUsesDefaultAndConfiguredEndpoint()
+    {
+        var original = Environment.GetEnvironmentVariable("POE_TRADE_BROWSER_CDP_URL");
+        try
+        {
+            Environment.SetEnvironmentVariable("POE_TRADE_BROWSER_CDP_URL", null);
+            Assert.Equal("http://127.0.0.1:9222", LocalBrowserConnection.Endpoint);
+            Environment.SetEnvironmentVariable("POE_TRADE_BROWSER_CDP_URL", " http://localhost:9333 ");
+            Assert.Equal("http://localhost:9333", LocalBrowserConnection.Endpoint);
+        }
+        finally { Environment.SetEnvironmentVariable("POE_TRADE_BROWSER_CDP_URL", original); }
+    }
 }

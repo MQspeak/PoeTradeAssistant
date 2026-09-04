@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace PoeTradeAssistant.LiveSearch;
 
-/// <summary>Owned Chromium session. Public lifecycle operations are serialized by the host.</summary>
+/// <summary>CDP connection to a local browser instance. Public lifecycle operations are serialized by the host.</summary>
 public sealed class BrowserSession : IAsyncDisposable
 {
     private readonly bool _headless;
@@ -16,6 +16,7 @@ public sealed class BrowserSession : IAsyncDisposable
         _configureContext = configureContext;
     }
     private IPlaywright? _playwright;
+    private IBrowser? _browser;
     private IBrowserContext? _context;
     private IPage? _loginPage;
     private readonly Dictionary<string, IPage> _pages = [];
@@ -24,8 +25,10 @@ public sealed class BrowserSession : IAsyncDisposable
     private long _generation;
     private bool _validated;
     private SystemBrowserRuntime? _runtime;
+    private bool _ownsContext;
+    private readonly HashSet<IPage> _createdPages = [];
     public bool IsOpen => _context is not null;
-    public string BrowserLabel => _runtime?.Label ?? "系统浏览器";
+    public string BrowserLabel => _runtime?.Label ?? "本地浏览器实例";
     public event Action<SearchHit>? Hit;
     public event Action<string>? Status;
     public static string CardsScript { get; } = ReadScript("cards.js");
@@ -42,27 +45,58 @@ public sealed class BrowserSession : IAsyncDisposable
         environment.Validate();
         if (_context is not null)
         {
-            _loginPage = _context.Pages.FirstOrDefault(x => !x.IsClosed) ?? await _context.NewPageAsync();
+            if (_loginPage is null || _loginPage.IsClosed)
+            {
+                _loginPage = await _context.NewPageAsync();
+                _createdPages.Add(_loginPage);
+                await _loginPage.GotoAsync(environment.HomeUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
+            }
             await _loginPage.BringToFrontAsync();
             return;
         }
-        _runtime = SystemBrowserLocator.Resolve();
         _playwright = await Playwright.CreateAsync();
         try
         {
-            Directory.CreateDirectory(dataDirectory);
-            _context = await _playwright.Chromium.LaunchPersistentContextAsync(
-                Path.Combine(dataDirectory, "browser-profile-" + _runtime.Channel), new()
+            if (_configureContext is not null)
             {
-                Headless = _headless, Channel = _runtime.Channel, Timeout = 30000,
-                ViewportSize = new() { Width = 1440, Height = 900 }
-            });
+                // Test harness owns this isolated context.
+                _runtime = SystemBrowserLocator.Resolve();
+                Directory.CreateDirectory(dataDirectory);
+                _context = await _playwright.Chromium.LaunchPersistentContextAsync(
+                    Path.Combine(dataDirectory, "browser-profile-" + _runtime.Channel), new()
+                {
+                    Headless = _headless, Channel = _runtime.Channel, Timeout = 30000,
+                    ViewportSize = new() { Width = 1440, Height = 900 }
+                });
+                _ownsContext = true;
+                await _configureContext(_context);
+            }
+            else
+            {
+                var endpoint = LocalBrowserConnection.Endpoint;
+                try
+                {
+                    _browser = await _playwright.Chromium.ConnectOverCDPAsync(endpoint, new() { Timeout = 10000 });
+                }
+                catch (PlaywrightException error)
+                {
+                    throw new InvalidOperationException(LocalBrowserConnection.ConnectionHelp(endpoint), error);
+                }
+                _context = _browser.Contexts.FirstOrDefault() ?? throw new InvalidOperationException(
+                    "本地浏览器没有可连接的上下文，请确认调试实例已经打开一个窗口。");
+                _runtime = new("cdp", "本地 Chrome/Edge 实例", endpoint);
+                _browser.Disconnected += (_, _) =>
+                {
+                    _validated = false;
+                    Status?.Invoke("本地浏览器连接已断开，请重新连接。");
+                };
+            }
             _validated = false;
-            if (_configureContext is not null) await _configureContext(_context);
-            _context.Close += (_, _) => { _validated = false; Status?.Invoke("浏览器已关闭，请先关闭会话，再重新登录。"); };
-            _loginPage = _context.Pages.FirstOrDefault() ?? await _context.NewPageAsync();
+            _context.Close += (_, _) => { _validated = false; Status?.Invoke("浏览器上下文已关闭，请重新连接。"); };
+            _loginPage = await _context.NewPageAsync();
+            _createdPages.Add(_loginPage);
             await _loginPage.GotoAsync(environment.HomeUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
-            Status?.Invoke($"已打开 {_runtime.Label}。请完成登录，再点击“验证登录”；浏览器可手动最小化。");
+            Status?.Invoke($"已连接 {_runtime.Label}。请确认页面登录状态，再点击“验证登录”。");
         }
         catch { await CloseAsync(); throw; }
     }
@@ -117,6 +151,7 @@ public sealed class BrowserSession : IAsyncDisposable
                 try
                 {
                     var page = await _context!.NewPageAsync();
+                    _createdPages.Add(page);
                     _pages[link.Id] = page;
                     Status?.Invoke($"正在连接：{link.Name}");
                     await page.GotoAsync(environment.ValidateUrl(link.Url), new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30000 });
@@ -238,14 +273,20 @@ public sealed class BrowserSession : IAsyncDisposable
         _validated = false;
         _captureCancellation?.Cancel();
         var context = _context;
-        // Closing pages interrupts pending navigation before waiting for the capture loop.
-        if (context is not null)
+        // Never close an attached user's browser/context. Only close pages created by this feature.
+        if (_ownsContext && context is not null)
             await context.CloseAsync();
+        else
+            foreach (var page in _createdPages.ToArray())
+                if (!page.IsClosed) await page.CloseAsync();
         await PauseAsync();
         _pages.Clear();
+        _createdPages.Clear();
         _loginPage = null;
         _context = null;
+        _browser = null;
         _runtime = null;
+        _ownsContext = false;
         _playwright?.Dispose();
         _playwright = null;
     }

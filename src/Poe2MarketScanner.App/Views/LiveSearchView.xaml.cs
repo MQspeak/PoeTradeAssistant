@@ -71,7 +71,7 @@ public partial class LiveSearchView : UserControl
         try
         {
             foreach (var link in _storage.Load(_environment).Links) _links.Add(link);
-            StatusText.Text = "工作区已加载。登录后验证，再启动监控。";
+            StatusText.Text = "工作区已加载。连接已开放调试端口的本地浏览器，验证后再启动监控。";
             Editor.IsEnabled = LinkActions.IsEnabled = true;
         }
         catch (Exception error)
@@ -117,12 +117,12 @@ public partial class LiveSearchView : UserControl
     private async void Pause_Click(object sender, RoutedEventArgs e) => await Run(async () =>
     {
         await _session.PauseAsync(); ++_epoch;
-        StatusText.Text = "采集已暂停，网页实时连接及手动前往仍保留。关闭会话可完全释放浏览器。";
+        StatusText.Text = "采集已暂停，网页实时连接及手动前往仍保留。关闭会话会关闭本功能页面并断开连接。";
     });
     private async void Close_Click(object sender, RoutedEventArgs e) => await Run(async () =>
     {
         await _session.CloseAsync(); ++_epoch;
-        StatusText.Text = "会话已关闭，登录保存在该环境专属目录。";
+        StatusText.Text = "连接已断开，本功能创建的交易页已关闭；本地浏览器仍保持运行。";
     });
     public async Task ShutdownAsync()
     {
