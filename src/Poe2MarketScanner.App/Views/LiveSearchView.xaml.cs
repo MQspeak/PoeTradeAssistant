@@ -3,6 +3,7 @@ using PoeTradeAssistant.LiveSearch;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -18,8 +19,8 @@ public partial class LiveSearchView : UserControl
     private readonly SearchStorage _storage = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PoeTradeAssistant", "live-search"));
     private readonly BrowserSession _session = new();
     private readonly ObservableCollection<SearchLink> _links = [];
-    private readonly ObservableCollection<SearchLink> _monitors = [];
-    private readonly ObservableCollection<SearchHit> _hits = [];
+    private readonly ObservableCollection<MonitorItem> _monitors = [];
+    private readonly ObservableCollection<SearchHitItem> _hits = [];
     private readonly HashSet<string> _submitted = [];
     private readonly Queue<SearchHit> _autoTravelQueue = [];
     private TradeEnvironment _environment = new("poe2", "international");
@@ -47,7 +48,7 @@ public partial class LiveSearchView : UserControl
         _session.Status += message =>
         {
             var epoch = _epoch;
-            Dispatcher.BeginInvoke(new Action(() => { if (!_closing && epoch == _epoch) StatusText.Text = message; }));
+            Dispatcher.BeginInvoke(new Action(() => { if (!_closing && epoch == _epoch) { StatusText.Text = message; _monitoring = _session.IsMonitoring; RefreshEnabled(); } }));
         };
         _session.Hit += hit =>
         {
@@ -55,7 +56,7 @@ public partial class LiveSearchView : UserControl
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_closing || epoch != _epoch) return;
-                _hits.Insert(0, hit);
+                _hits.Insert(0, new(hit));
                 while (_hits.Count > 50) _hits.RemoveAt(_hits.Count - 1);
                 if (!hit.Initial) System.Media.SystemSounds.Asterisk.Play();
                 QueueAutoTravel(hit, epoch);
@@ -80,7 +81,7 @@ public partial class LiveSearchView : UserControl
         _links.Clear(); _hits.Clear(); _submitted.Clear();
         _monitors.Clear();
         ResetAutoTravelQueue();
-        NameInput.Clear(); UrlInput.Clear(); DetailText.Clear();
+        NameInput.Clear(); UrlInput.Clear();
         try
         {
             foreach (var link in _storage.Load(_environment).Links) _links.Add(link);
@@ -99,10 +100,14 @@ public partial class LiveSearchView : UserControl
     {
         Actions.IsEnabled = !_busy && !_closing && !_scanning;
         RegionPicker.IsEnabled = CanSwitchGame && !_scanning;
-        TravelButton.IsEnabled = !_busy && !_closing && !_scanning && _session.IsOpen;
         AutoTravelToggle.IsEnabled = !_busy && !_closing && !_scanning;
         ContinuousTravelToggle.IsEnabled = AutoTravelToggle.IsEnabled && !_monitoring;
         TravelIntervalInput.IsEnabled = AutoTravelToggle.IsEnabled && !_monitoring;
+        ValidateButton.Content = _session.IsValidated ? "断开" : "验证登录";
+        ValidateButton.Background = _session.IsValidated ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(143, 46, 56)) : (System.Windows.Media.Brush)FindResource("AppSurfaceRaisedBrush");
+        StartButton.Content = _monitoring ? "全部停止" : "启动全部";
+        StartButton.IsEnabled = _session.IsValidated;
+        RefreshMonitors();
         AvailabilityChanged?.Invoke();
     }
     private void RegionChanged(object sender, SelectionChangedEventArgs e)
@@ -125,9 +130,27 @@ public partial class LiveSearchView : UserControl
         finally { _busy = false; RefreshEnabled(); }
     }
     private async void Login_Click(object sender, RoutedEventArgs e) => await Run(() => _session.OpenLoginAsync(_environment, _storage.DirectoryFor(_environment)));
-    private async void Validate_Click(object sender, RoutedEventArgs e) => await Run(() => _session.ValidateLoginAsync(_environment));
+    private async void Validate_Click(object sender, RoutedEventArgs e) => await Run(async () =>
+    {
+        if (_session.IsValidated)
+        {
+            ++_epoch; ResetAutoTravelQueue(); _monitoring = false;
+            await _session.CloseAsync();
+            StatusText.Text = "已断开浏览器连接。";
+        }
+        else
+        {
+            await _session.ValidateLoginAsync(_environment);
+            StatusText.Text = "登录验证成功，可以启动监控。";
+        }
+    });
     private async void Start_Click(object sender, RoutedEventArgs e) => await Run(async () =>
     {
+        if (_monitoring)
+        {
+            ++_epoch; ResetAutoTravelQueue(); _monitoring = false;
+            await _session.StopAllAsync(); StatusText.Text = "全部监控已停止，链接仍保留。"; return;
+        }
         ++_epoch; _hits.Clear(); _submitted.Clear(); ResetAutoTravelQueue();
         await _session.StartAsync(_environment, _links.ToArray());
         _monitoring = true;
@@ -186,12 +209,51 @@ public partial class LiveSearchView : UserControl
     {
         if (LinkList.SelectedItem is SearchLink link) { NameInput.Text = link.Name; UrlInput.Text = link.Url; }
     }
-    private void HitSelected(object sender, SelectionChangedEventArgs e) => DetailText.Text = (HitList.SelectedItem as SearchHit)?.Detail ?? "";
+
+
+    private void EditMonitor_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MonitorItem monitor) return;
+        var link = monitor.Link;
+        LinkList.SelectedItem = link;
+        NameInput.Text = link.Name; UrlInput.Text = link.Url;
+        WorkspaceNavigation.SelectedIndex = 1;
+    }
+
+    private async void StopMonitor_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not MonitorItem item) return;
+        await Run(async () =>
+        {
+            await _session.StopMonitorAsync(item.Id);
+            _monitoring = _session.IsMonitoring;
+            StatusText.Text = $"已停止 {item.Name}，链接仍保留在监控列表。";
+        });
+    }
+
+    private void ToggleLinkMonitor_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is SearchLink link)
+            Mutate(links => links.Select(x => x.Id == link.Id ? x with { Enabled = !x.Enabled } : x).ToList());
+    }
+
+    private void EditLink_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not SearchLink link) return;
+        LinkList.SelectedItem = link;
+        NameInput.Text = link.Name; UrlInput.Text = link.Url;
+    }
+
+    private void DeleteLink_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is SearchLink link)
+            Mutate(links => links.Where(x => x.Id != link.Id).ToList());
+    }
 
     private void RefreshMonitors()
     {
         _monitors.Clear();
-        foreach (var link in _links.Where(x => x.Enabled)) _monitors.Add(link);
+        foreach (var link in _links.Where(x => x.Enabled)) _monitors.Add(new(link, _session.IsMonitorActive(link.Id)));
     }
 
     private void AutoTravelChanged(object sender, RoutedEventArgs e)
@@ -240,10 +302,11 @@ public partial class LiveSearchView : UserControl
                 }
                 token.ThrowIfCancellationRequested();
                 var key = hit.MonitorId + ":" + hit.Id;
-                var ok = !_submitted.Contains(key) && await _session.TravelAsync(hit);
+                var ok = _session.IsMonitorActive(hit.MonitorId) && !_submitted.Contains(key) && await _session.TravelAsync(hit);
                 if (ok)
                 {
                     _submitted.Add(key);
+                    MarkRead(hit);
                     _lastAutoTravelAt = DateTimeOffset.Now;
                 }
                 if (!_autoTravelContinuous)
@@ -276,7 +339,19 @@ public partial class LiveSearchView : UserControl
     }
     private async void Travel_Click(object sender, RoutedEventArgs e)
     {
-        if (HitList.SelectedItem is not SearchHit hit) return;
+        if (HitList.SelectedItem is not SearchHitItem item) return;
+        await TravelHitAsync(item);
+    }
+
+    private async void TravelHit_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is SearchHitItem item)
+            await TravelHitAsync(item);
+    }
+
+    private async Task TravelHitAsync(SearchHitItem item)
+    {
+        var hit = item.Hit;
         await Run(async () =>
         {
             var key = hit.MonitorId + ":" + hit.Id;
@@ -284,12 +359,24 @@ public partial class LiveSearchView : UserControl
             if (await _session.TravelAsync(hit))
             {
                 _submitted.Add(key);
+                item.Read = true;
                 StatusText.Text = "已提交一次前往请求，请查看游戏。";
             }
             else StatusText.Text = "当前网页已没有该结果或前往按钮不可用。";
         });
     }
-    private void ClearHits_Click(object sender, RoutedEventArgs e) { _hits.Clear(); DetailText.Clear(); }
+
+    private void MarkRead_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is SearchHitItem item) item.Read = true;
+    }
+
+    private void MarkRead(SearchHit hit)
+    {
+        var item = _hits.FirstOrDefault(x => x.Hit.Id == hit.Id && x.Hit.MonitorId == hit.MonitorId);
+        if (item is not null) item.Read = true;
+    }
+    private void ClearHits_Click(object sender, RoutedEventArgs e) { _hits.Clear(); }
     private void Export_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new SaveFileDialog { Filter = "JSON|*.json", FileName = $"{_environment.Key}-links.json" };
@@ -320,5 +407,32 @@ public partial class LiveSearchView : UserControl
             }
             return links;
         });
+    }
+
+    private sealed record MonitorItem(SearchLink Link, bool Active)
+    {
+        public string Id => Link.Id;
+        public string Name => Link.Name;
+        public string Url => Link.Url;
+        public string RuntimeStatus => Active ? "运行中" : "已停止";
+    }
+
+    private sealed class SearchHitItem(SearchHit hit) : INotifyPropertyChanged
+    {
+        private bool _read;
+        public SearchHit Hit { get; } = hit;
+        public bool Read
+        {
+            get => _read;
+            set
+            {
+                if (_read == value) return;
+                _read = value;
+                PropertyChanged?.Invoke(this, new(nameof(Read)));
+                PropertyChanged?.Invoke(this, new(nameof(ReadVisibility)));
+            }
+        }
+        public Visibility ReadVisibility => Read ? Visibility.Visible : Visibility.Collapsed;
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }

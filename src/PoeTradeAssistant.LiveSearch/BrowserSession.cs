@@ -27,6 +27,10 @@ public sealed class BrowserSession : IAsyncDisposable
     private SystemBrowserRuntime? _runtime;
     private bool _ownsContext;
     private readonly HashSet<IPage> _createdPages = [];
+    public bool IsValidated => _validated;
+    private readonly HashSet<string> _stopped = [];
+    public bool IsMonitorActive(string id) => !_stopped.Contains(id) && !_captureTask.IsCompleted;
+    public bool IsMonitoring => !_captureTask.IsCompleted && _pages.Keys.Any(id => !_stopped.Contains(id));
     public bool IsOpen => _context is not null;
     public string BrowserLabel => _runtime?.Label ?? "本地浏览器实例";
     public event Action<SearchHit>? Hit;
@@ -120,12 +124,33 @@ public sealed class BrowserSession : IAsyncDisposable
             if (state == "ready" && (loggedIn || sessionCookie))
             {
                 _validated = true;
-                Status?.Invoke("登录验证通过。可以启动已启用的监控链接。");
+                await HideBrowserAsync(_loginPage);
+                Status?.Invoke("登录验证通过，浏览器已最小化。可以启动已启用的监控链接。");
                 return;
             }
             await Task.Delay(500);
         }
         throw new InvalidOperationException("未确认有效的交易页登录态，请在浏览器登录后再次验证。");
+    }
+
+    private static async Task HideBrowserAsync(IPage page)
+    {
+        try
+        {
+            var session = await page.Context.NewCDPSessionAsync(page);
+            var window = await session.SendAsync("Browser.getWindowForTarget");
+            if (window is { } response && response.TryGetProperty("windowId", out var id))
+                await session.SendAsync("Browser.setWindowBounds", new Dictionary<string, object>
+                {
+                    ["windowId"] = id.GetInt32(),
+                    ["bounds"] = new Dictionary<string, object> { ["windowState"] = "minimized" }
+                });
+            await session.DetachAsync();
+        }
+        catch (PlaywrightException)
+        {
+            // Login remains valid when a browser implementation does not expose window bounds.
+        }
     }
 
     public async Task StartAsync(TradeEnvironment environment, IReadOnlyList<SearchLink> links)
@@ -137,6 +162,7 @@ public sealed class BrowserSession : IAsyncDisposable
         await PauseAsync();
         foreach (var page in _pages.Values) if (!page.IsClosed) await page.CloseAsync();
         _pages.Clear();
+        _stopped.Clear();
         _captureCancellation = new();
         var generation = ++_generation;
         _captureTask = CaptureAsync(environment, enabled, generation, _captureCancellation.Token);
@@ -151,15 +177,23 @@ public sealed class BrowserSession : IAsyncDisposable
             foreach (var link in links)
             {
                 token.ThrowIfCancellationRequested();
+                if (_stopped.Contains(link.Id)) continue;
                 try
                 {
                     var page = await _context!.NewPageAsync();
                     _createdPages.Add(page);
                     _pages[link.Id] = page;
+                    if (token.IsCancellationRequested || _stopped.Contains(link.Id))
+                    {
+                        await page.CloseAsync();
+                        token.ThrowIfCancellationRequested();
+                        continue;
+                    }
                     Status?.Invoke($"正在连接：{link.Name}");
                     await page.GotoAsync(environment.ValidateUrl(link.Url), new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30000 });
                     await ActivateLiveAsync(page, token);
                     token.ThrowIfCancellationRequested();
+                    if (_stopped.Contains(link.Id)) continue;
                     var cards = await page.EvaluateAsync<JsonElement>(CardsScript);
                     EmitCards(link, cards, seen, true, generation, token);
                     ready.Add(link.Id);
@@ -174,6 +208,7 @@ public sealed class BrowserSession : IAsyncDisposable
                 foreach (var link in links.Where(x => ready.Contains(x.Id)))
                 {
                     token.ThrowIfCancellationRequested();
+                    if (_stopped.Contains(link.Id)) { ready.Remove(link.Id); continue; }
                     try
                     {
                         var page = _pages[link.Id];
@@ -196,14 +231,14 @@ public sealed class BrowserSession : IAsyncDisposable
     {
         foreach (var card in cards.EnumerateArray())
         {
-            if (token.IsCancellationRequested || generation != _generation) return;
+            if (token.IsCancellationRequested || generation != _generation || _stopped.Contains(link.Id)) return;
             var id = card.GetProperty("id").GetString()!;
             if (!seen.Add(link.Id + ":" + id)) continue;
             // Bound a session explicitly instead of silently evicting IDs and notifying twice.
             if (seen.Count > 100000) throw new InvalidOperationException("本会话命中数量已达上限，请重新启动监控。");
             Hit?.Invoke(new(id, link.Id, link.Name, card.GetProperty("title").GetString()!,
                 card.GetProperty("price").GetString()!, card.GetProperty("detail").GetString()!,
-                card.GetProperty("url").GetString()!, card.GetProperty("canTravel").GetBoolean(), initial, DateTimeOffset.Now));
+                card.GetProperty("url").GetString()!, card.GetProperty("canTravel").GetBoolean(), initial, DateTimeOffset.Now, card.GetProperty("titleColor").GetString()!));
         }
     }
 
@@ -259,6 +294,22 @@ public sealed class BrowserSession : IAsyncDisposable
                 button.click(); return true;
             }
             """, hit.Id);
+    }
+
+    public async Task StopMonitorAsync(string id)
+    {
+        _stopped.Add(id);
+        if (_pages.TryGetValue(id, out var page) && !page.IsClosed) await page.CloseAsync();
+        Status?.Invoke("监控已停止。");
+    }
+
+    public async Task StopAllAsync()
+    {
+        ++_generation;
+        _captureCancellation?.Cancel();
+        foreach (var id in _pages.Keys.ToArray()) _stopped.Add(id);
+        foreach (var page in _pages.Values.ToArray()) if (!page.IsClosed) await page.CloseAsync();
+        await PauseAsync();
     }
 
     public async Task PauseAsync()

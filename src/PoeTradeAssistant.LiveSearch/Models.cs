@@ -30,7 +30,7 @@ public sealed record SearchWorkspace(int Version, List<SearchLink> Links);
 public sealed record LinkExport(int Version, string Region, List<SharedLink> Links);
 public sealed record SharedLink(string Name, string LiveSearchUrl, string Notes = "");
 public sealed record SearchHit(string Id, string MonitorId, string MonitorName, string Title,
-    string Price, string Detail, string Url, bool CanTravel, bool Initial, DateTimeOffset SeenAt);
+    string Price, string Detail, string Url, bool CanTravel, bool Initial, DateTimeOffset SeenAt, string TitleColor = "#C8C8C8");
 
 public sealed class SearchStorage(string root)
 {

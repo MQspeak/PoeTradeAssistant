@@ -22,6 +22,18 @@ await page.EvaluateAsync("() => document.querySelector('.search-results').insert
 cards = await page.EvaluateAsync<JsonElement>(BrowserSession.CardsScript);
 if (cards.GetArrayLength() != 2 || cards[1].GetProperty("canTravel").GetBoolean()) throw new Exception("Update or disabled-action extraction failed.");
 Console.WriteLine($"PASS: system {runtime.Label} {browser.Version}; English/Chinese cards, updates, details, disabled actions.");
+await page.SetContentAsync("""
+    <div class="resultset"><div data-id="verified-test" class="row">
+    <div>Verified</div><div class="itemHeader rare"><div class="itemName">Verified</div><div class="itemName">Fate Rend</div></div>
+    <div>Exact Price: 1×Divine Orb lovecoc#3942 listed just now</div>
+    </div></div>
+    """);
+cards = await page.EvaluateAsync<JsonElement>(BrowserSession.CardsScript);
+if (cards[0].GetProperty("title").GetString() != "Fate Rend" ||
+    cards[0].GetProperty("price").GetString() != "1×Divine Orb" ||
+    cards[0].GetProperty("titleColor").GetString() != "#FFFF77")
+    throw new Exception("Verified, seller suffix or rarity regression.");
+Console.WriteLine("PASS: Verified skipped; seller excluded; rare title color.");
 await browser.CloseAsync();
 if (browser.IsConnected) throw new Exception("Browser did not close.");
 Console.WriteLine("PASS: browser shutdown.");
@@ -72,6 +84,14 @@ try
     await monitorPage.EvaluateAsync("() => document.querySelector('.resultset').insertAdjacentHTML('beforeend', '<div class=\"row\" data-id=\"paused\"><div class=\"itemName\">Paused</div></div>')");
     await Task.Delay(1500);
     if (hitCount != 2 || monitorPage.IsClosed) throw new Exception("Pause should stop capture but retain the page.");
+    await session.StartAsync(environment, [new("monitor", "Fixture", environment.HomeUrl + "/fixture"), new("second", "Second", environment.HomeUrl + "/second")]);
+    var deadline = DateTime.UtcNow.AddSeconds(10);
+    while (ownedContext.Pages.Count(x => x.Url.EndsWith("/second")) == 0 && DateTime.UtcNow < deadline) await Task.Delay(100);
+    await session.StopMonitorAsync("monitor");
+    if (session.IsMonitorActive("monitor") || !session.IsMonitorActive("second")) throw new Exception("Individual stop affected another monitor.");
+    await session.StopAllAsync();
+    if (session.IsMonitoring) throw new Exception("Stop all left monitors active.");
+    Console.WriteLine("PASS: independent monitor stop and stop all.");
     await session.CloseAsync();
     if (session.IsOpen || !contextClosed) throw new Exception("Owned persistent context did not close.");
     Console.WriteLine("PASS: routed fixture login, monitoring, initial/update, deduplication, single travel click, pause, persistent-context shutdown.");
