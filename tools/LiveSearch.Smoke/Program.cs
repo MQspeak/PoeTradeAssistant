@@ -24,16 +24,31 @@ if (cards.GetArrayLength() != 2 || cards[1].GetProperty("canTravel").GetBoolean(
 Console.WriteLine($"PASS: system {runtime.Label} {browser.Version}; English/Chinese cards, updates, details, disabled actions.");
 await page.SetContentAsync("""
     <div class="resultset"><div data-id="verified-test" class="row">
-    <div>Verified</div><div class="itemHeader rare"><div class="itemName">Verified</div><div class="itemName">Fate Rend</div></div>
+    <div>Verified</div><div class="itemHeader rare" style="color:#ffff77"><div class="itemName">Verified</div><div class="itemName">Fate Rend</div></div>
     <div>Exact Price: 1×Divine Orb lovecoc#3942 listed just now</div>
     </div></div>
     """);
 cards = await page.EvaluateAsync<JsonElement>(BrowserSession.CardsScript);
 if (cards[0].GetProperty("title").GetString() != "Fate Rend" ||
     cards[0].GetProperty("price").GetString() != "1×Divine Orb" ||
-    cards[0].GetProperty("titleColor").GetString() != "#FFFF77")
+    cards[0].GetProperty("titleColor").GetString() != "#ffff77")
     throw new Exception("Verified, seller suffix or rarity regression.");
 Console.WriteLine("PASS: Verified skipped; seller excluded; rare title color.");
+foreach (var (markup, expectedTitle, expectedColor) in new[]
+{
+    ("<div class='itemName' style='color:white'><span>Verified</span><span style='color:#af6025'>Soulwrest</span></div>", "Soulwrest", "#af6025"),
+    ("<div>Verified</div><div class='title'><span style='color:rgb(136,136,255)'>Magic Wand</span></div>", "Magic Wand", "#8888ff"),
+    ("<div>Verified</div><div style='color:#ffff77'>Fate Rend</div>", "Fate Rend", "#ffff77"),
+    ("<div class='itemHeader rare' style='color:white'><div class='itemName' style='color:#af6025'>Page Colour Wins</div></div>", "Page Colour Wins", "#af6025"),
+    ("<div class='itemName' style='color:color(srgb 0.1 0.6 0.5)'>Gem</div>", "Gem", "#1a9980")
+})
+{
+    await page.SetContentAsync("<div class='resultset'><div data-id='color-test'>" + markup + "</div></div>");
+    cards = await page.EvaluateAsync<JsonElement>(BrowserSession.CardsScript);
+    if (cards[0].GetProperty("title").GetString() != expectedTitle || cards[0].GetProperty("titleColor").GetString() != expectedColor)
+        throw new Exception("Nested/fallback title colour failed: " + cards[0].ToString());
+}
+Console.WriteLine("PASS: nested title, fallback title, page colour precedence and CSS srgb colours.");
 await browser.CloseAsync();
 if (browser.IsConnected) throw new Exception("Browser did not close.");
 Console.WriteLine("PASS: browser shutdown.");
