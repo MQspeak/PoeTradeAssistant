@@ -18,7 +18,7 @@
    <StackPanel><TextBlock Text="实时搜索" FontSize="28" FontWeight="SemiBold"/><TextBlock x:Name="EnvironmentText" Margin="0,8,0,0" Foreground="{StaticResource AppMutedTextBrush}"/></StackPanel>
    <WrapPanel Grid.Column="1" VerticalAlignment="Center" x:Name="Actions">
     <ComboBox x:Name="RegionPicker" Width="110" SelectedIndex="0" SelectionChanged="RegionChanged"><ComboBoxItem Content="国际服"/><ComboBoxItem Content="国服"/></ComboBox>
-    <Button Margin="8,0,0,0" Click="Login_Click">一键启动 / 连接</Button><Button Margin="8,0,0,0" x:Name="ValidateButton" Click="Validate_Click">验证登录</Button>
+    <Button Margin="8,0,0,0" Click="Login_Click">一键启动 / 连接</Button><Button Margin="8,0,0,0" Click="ShowBrowser_Click">显示浏览器</Button><Button Margin="8,0,0,0" x:Name="ValidateButton" Click="Validate_Click">验证登录</Button>
     <Button Margin="8,0,0,0" x:Name="StartButton" Click="Start_Click">启动全部</Button>
    </WrapPanel>
   </Grid>

@@ -26,6 +26,24 @@ public sealed class BrowserSession : IAsyncDisposable
     private bool _validated;
     private SystemBrowserRuntime? _runtime;
     private bool _ownsContext;
+    private bool _canHideWindow;
+    private bool _closingSession;
+    private readonly BrowserWindow _window = new();
+    public event Action? Disconnected;
+    private void OnDisconnected()
+    {
+        if (_closingSession || _context is null) return;
+        _validated = false;
+        ++_generation;
+        _captureCancellation?.Cancel();
+        _window.Show();
+        Disconnected?.Invoke();
+    }
+    public async Task ShowBrowserAsync()
+    {
+        _window.Show();
+        if (_loginPage is { IsClosed: false }) await _loginPage.BringToFrontAsync().WaitAsync(TimeSpan.FromSeconds(5));
+    }
     private readonly HashSet<IPage> _createdPages = [];
     public bool IsValidated => _validated;
     private readonly HashSet<string> _stopped = [];
@@ -55,7 +73,7 @@ public sealed class BrowserSession : IAsyncDisposable
                 _createdPages.Add(_loginPage);
                 await _loginPage.GotoAsync(environment.HomeUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
             }
-            await _loginPage.BringToFrontAsync();
+            await ShowBrowserAsync();
             return;
         }
         _playwright = await Playwright.CreateAsync();
@@ -79,6 +97,7 @@ public sealed class BrowserSession : IAsyncDisposable
             {
                 var endpoint = LocalBrowserConnection.Endpoint;
                 var launchedRuntime = await LocalBrowserConnection.EnsureAvailableAsync(dataDirectory);
+                _canHideWindow = launchedRuntime is not null;
                 try
                 {
                     _browser = await _playwright.Chromium.ConnectOverCDPAsync(endpoint, new() { Timeout = 10000 });
@@ -92,14 +111,10 @@ public sealed class BrowserSession : IAsyncDisposable
                 _runtime = launchedRuntime is null
                     ? new("cdp", "已运行的本地 Chrome/Edge", endpoint)
                     : launchedRuntime with { Label = launchedRuntime.Label + "（本机）" };
-                _browser.Disconnected += (_, _) =>
-                {
-                    _validated = false;
-                    Status?.Invoke("本地浏览器连接已断开，请重新连接。");
-                };
+                _browser.Disconnected += (_, _) => OnDisconnected();
             }
             _validated = false;
-            _context.Close += (_, _) => { _validated = false; Status?.Invoke("浏览器上下文已关闭，请重新连接。"); };
+            _context.Close += (_, _) => OnDisconnected();
             _loginPage = await _context.NewPageAsync();
             _createdPages.Add(_loginPage);
             await _loginPage.GotoAsync(environment.HomeUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 45000 });
@@ -124,8 +139,8 @@ public sealed class BrowserSession : IAsyncDisposable
             if (state == "ready" && (loggedIn || sessionCookie))
             {
                 _validated = true;
-                await HideBrowserAsync(_loginPage);
-                Status?.Invoke("登录验证通过，浏览器已最小化。可以启动已启用的监控链接。");
+                var hidden = await HideBrowserAsync(_loginPage);
+                Status?.Invoke(hidden ? "登录验证成功，浏览器已隐藏。" : "登录验证成功。当前浏览器窗口保留可见，可继续监控。");
                 return;
             }
             await Task.Delay(500);
@@ -133,24 +148,30 @@ public sealed class BrowserSession : IAsyncDisposable
         throw new InvalidOperationException("未确认有效的交易页登录态，请在浏览器登录后再次验证。");
     }
 
-    private static async Task HideBrowserAsync(IPage page)
+    private async Task<bool> HideBrowserAsync(IPage page)
     {
+        if (!_canHideWindow) return false;
+        var marker = "PoeTradeAssistant-" + Guid.NewGuid().ToString("N");
+        string? title = null;
         try
         {
-            var session = await page.Context.NewCDPSessionAsync(page);
-            var window = await session.SendAsync("Browser.getWindowForTarget");
-            if (window is { } response && response.TryGetProperty("windowId", out var id))
-                await session.SendAsync("Browser.setWindowBounds", new Dictionary<string, object>
-                {
-                    ["windowId"] = id.GetInt32(),
-                    ["bounds"] = new Dictionary<string, object> { ["windowState"] = "minimized" }
-                });
-            await session.DetachAsync();
+            title = await page.TitleAsync().WaitAsync(TimeSpan.FromSeconds(3));
+            await page.EvaluateAsync("title => document.title = title", marker).WaitAsync(TimeSpan.FromSeconds(3));
+            await page.BringToFrontAsync().WaitAsync(TimeSpan.FromSeconds(3));
+            for (var i = 0; i < 10; i++)
+            {
+                if (_window.Hide(marker)) return true;
+                await Task.Delay(100);
+            }
         }
-        catch (PlaywrightException)
+        catch (Exception error) when (error is PlaywrightException or TimeoutException) { }
+        finally
         {
-            // Login remains valid when a browser implementation does not expose window bounds.
+            if (title is not null && !page.IsClosed)
+                try { await page.EvaluateAsync("title => document.title = title", title).WaitAsync(TimeSpan.FromSeconds(2)); }
+                catch (Exception error) when (error is PlaywrightException or TimeoutException) { }
         }
+        return false;
     }
 
     public async Task StartAsync(TradeEnvironment environment, IReadOnlyList<SearchLink> links)
@@ -293,7 +314,7 @@ public sealed class BrowserSession : IAsyncDisposable
                 if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true') return false;
                 button.click(); return true;
             }
-            """, hit.Id);
+            """, hit.Id).WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     public async Task StopMonitorAsync(string id)
@@ -316,33 +337,43 @@ public sealed class BrowserSession : IAsyncDisposable
     {
         ++_generation;
         _captureCancellation?.Cancel();
-        await _captureTask;
+        await _captureTask.WaitAsync(TimeSpan.FromSeconds(5));
         _captureCancellation?.Dispose();
         _captureCancellation = null;
     }
 
     public async Task CloseAsync()
     {
+        if (_closingSession) return;
+        _closingSession = true;
         ++_generation;
         _validated = false;
         _captureCancellation?.Cancel();
-        var context = _context;
-        // Never close an attached user's browser/context. Only close pages created by this feature.
-        if (_ownsContext && context is not null)
-            await context.CloseAsync();
-        else
-            foreach (var page in _createdPages.ToArray())
-                if (!page.IsClosed) await page.CloseAsync();
-        await PauseAsync();
-        _pages.Clear();
-        _createdPages.Clear();
-        _loginPage = null;
-        _context = null;
-        _browser = null;
-        _runtime = null;
-        _ownsContext = false;
-        _playwright?.Dispose();
-        _playwright = null;
+        _window.Show();
+        try
+        {
+            var context = _context;
+            var tasks = _ownsContext && context is not null
+                ? new[] { context.CloseAsync() }
+                : _createdPages.Where(p => !p.IsClosed).Select(p => p.CloseAsync()).ToArray();
+            await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5));
+            await _captureTask.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception error) when (error is PlaywrightException or TimeoutException or OperationCanceledException) { }
+        finally
+        {
+            _context = null;
+            _pages.Clear();
+            _createdPages.Clear();
+            _loginPage = null;
+            _browser = null;
+            _runtime = null;
+            _ownsContext = false;
+            _canHideWindow = false;
+            _playwright?.Dispose();
+            _playwright = null;
+            _closingSession = false;
+        }
     }
     public async ValueTask DisposeAsync() => await CloseAsync();
 }

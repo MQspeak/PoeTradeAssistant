@@ -45,6 +45,16 @@ public partial class LiveSearchView : UserControl
         LinkList.ItemsSource = _links;
         MonitorList.ItemsSource = _monitors;
         HitList.ItemsSource = _hits;
+        _session.Disconnected += () => Dispatcher.BeginInvoke(new Action(async () =>
+        {
+            ++_epoch;
+            ResetAutoTravelQueue();
+            AutoTravelToggle.IsChecked = false;
+            _monitoring = false;
+            await _session.CloseAsync();
+            StatusText.Text = "浏览器连接已断开，监控已停止。可以重新连接或使用其他功能。";
+            RefreshEnabled();
+        }));
         _session.Status += message =>
         {
             var epoch = _epoch;
@@ -125,10 +135,17 @@ public partial class LiveSearchView : UserControl
     }
     private async Task ExecuteAsync(Func<Task> action)
     {
-        try { await action(); }
+        try { await action().WaitAsync(TimeSpan.FromSeconds(60)); }
+        catch (TimeoutException)
+        {
+            ++_epoch; ResetAutoTravelQueue(); _monitoring = false;
+            await _session.CloseAsync();
+            StatusText.Text = "浏览器操作超时，会话已释放，请重新连接。";
+        }
         catch (Exception error) { StatusText.Text = error.Message; }
         finally { _busy = false; RefreshEnabled(); }
     }
+    private async void ShowBrowser_Click(object sender, RoutedEventArgs e) => await Run(() => _session.ShowBrowserAsync());
     private async void Login_Click(object sender, RoutedEventArgs e) => await Run(() => _session.OpenLoginAsync(_environment, _storage.DirectoryFor(_environment)));
     private async void Validate_Click(object sender, RoutedEventArgs e) => await Run(async () =>
     {

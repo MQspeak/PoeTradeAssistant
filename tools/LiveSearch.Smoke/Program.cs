@@ -107,7 +107,11 @@ try
     await session.StopAllAsync();
     if (session.IsMonitoring) throw new Exception("Stop all left monitors active.");
     Console.WriteLine("PASS: independent monitor stop and stop all.");
-    await session.CloseAsync();
+    var disconnected = false;
+    session.Disconnected += () => disconnected = true;
+    await ownedContext.CloseAsync();
+    if (!disconnected || session.IsValidated) throw new Exception("Unexpected disconnect did not invalidate login.");
+    await session.CloseAsync().WaitAsync(TimeSpan.FromSeconds(8));
     if (session.IsOpen || !contextClosed) throw new Exception("Owned persistent context did not close.");
     Console.WriteLine("PASS: routed fixture login, monitoring, initial/update, deduplication, single travel click, pause, persistent-context shutdown.");
 }
