@@ -8,6 +8,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Playwright" Version="1.60.0" />
     <EmbeddedResource Include="Scripts/*.js" />
+    <EmbeddedResource Include="Data/poe2-en-cn.json" />
+    <None Include="Data/TRANSLATION-SOURCE.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
 

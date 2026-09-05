@@ -52,11 +52,11 @@
      </StackPanel>
      <ListView Grid.Row="1" x:Name="HitList" BorderThickness="0"><ListView.ItemTemplate><DataTemplate>
       <Border Margin="1" Padding="10,8" Background="#182334" BorderBrush="#30445F" BorderThickness="1" CornerRadius="7" ToolTipService.InitialShowDelay="200" ToolTipService.ShowDuration="60000">
-       <Border.ToolTip><ToolTip Background="#111B29" Foreground="#E8EDF5" BorderBrush="#48617F" Padding="16" Placement="Left"><ScrollViewer MaxHeight="600" VerticalScrollBarVisibility="Auto"><TextBlock Width="340" TextWrapping="Wrap" Text="{Binding Hit.Detail}"/></ScrollViewer></ToolTip></Border.ToolTip>
+       <Border.ToolTip><ToolTip Background="#111B29" Foreground="#E8EDF5" BorderBrush="#48617F" Padding="16" Placement="Left"><ScrollViewer MaxHeight="600" VerticalScrollBarVisibility="Auto"><TextBlock Width="340" TextWrapping="Wrap" Text="{Binding DisplayDetail}"/></ScrollViewer></ToolTip></Border.ToolTip>
        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{Binding Hit.TitleColor}" Text="{Binding Hit.Title}" Margin="0,0,8,0"/>
+        <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{Binding Hit.TitleColor}" Text="{Binding DisplayTitle}" Margin="0,0,8,0"/>
         <TextBlock Grid.Row="1" Margin="0,5,8,0" Foreground="{StaticResource AppMutedTextBrush}" TextTrimming="CharacterEllipsis" Text="{Binding Hit.MonitorName}"/>
-        <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{StaticResource AppAccentHoverBrush}" Text="{Binding Hit.Price}"/>
+        <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{StaticResource AppAccentHoverBrush}" Text="{Binding DisplayPrice}"/>
         <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,5,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
          <Button Width="28" Height="26" MinWidth="0" MinHeight="0" Padding="0" Click="TravelHit_Click" IsEnabled="{Binding Hit.CanTravel}" ToolTip="前往藏身处"><TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE80F;"/></Button>
          <Button Width="28" Height="26" MinWidth="0" MinHeight="0" Padding="0" Margin="5,0,0,0" Click="MarkRead_Click" ToolTip="标记已读"><TextBlock FontFamily="Segoe MDL2 Assets"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="&#xE8A4;"/><Setter Property="Foreground" Value="#AAB8CC"/><Style.Triggers><DataTrigger Binding="{Binding Read}" Value="True"><Setter Property="Text" Value="&#xE73E;"/><Setter Property="Foreground" Value="#70D7AE"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></Button>
