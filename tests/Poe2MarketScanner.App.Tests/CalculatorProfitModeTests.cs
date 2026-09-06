@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using Poe2MarketScanner.App.Services;
 using PoeTradeAssistant.Contracts.MarketScan;
 using Xunit;
@@ -98,6 +99,28 @@ public sealed class CalculatorProfitModeTests
             Assert.Equal("+300.00%", target.RoiText);
         }
         finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void CalculatesSortableRoiAndGoldEfficiencyValues()
+    {
+        var calculator = new NativeCalculatorViewModel(Path.Combine(Path.GetTempPath(), $"calculator-gold-{Guid.NewGuid():N}.json"));
+        calculator.ImportScanDocument(Scan());
+        calculator.Items.Single(item => item.Name == "测试标的").GoldCostText = "100";
+        calculator.Items.Single(item => item.Name == "C").GoldCostText = "10";
+        calculator.Items.Single(item => item.Name == "D").GoldCostText = "50";
+
+        var target = calculator.Targets[0];
+        Assert.Equal(20m, target.RoiValue);
+        Assert.True(target.IsPositiveRoi);
+        Assert.Equal(700m, target.GoldEfficiencyValue);
+        Assert.Equal("700.00 金/D", target.GoldEfficiencyText);
+
+        target.ActiveSellPriceText = "2";
+        Assert.Equal(-20m, target.RoiValue);
+        Assert.True(target.IsNegativeRoi);
+        Assert.Null(target.GoldEfficiencyValue);
+        Assert.Equal("--", target.GoldEfficiencyText);
     }
 
     private static PriceScanDocument Scan() => new()

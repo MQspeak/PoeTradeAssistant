@@ -241,8 +241,9 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
             var roi = profitInBuy / buyPrice * 100m;
             var gold = ParseNonNegative(target.TargetItem.GoldCostText) + sellPrice * ParseNonNegative(pair.BaseItem!.GoldCostText) + buyPrice * ParseNonNegative(pair.QuoteItem!.GoldCostText);
             var profitable = profitInBuy > 0;
-            var efficiency = profitable ? $"每赚 1 {pair.BaseItem.Name} 约消耗 {(gold / (profitInBuy / sellToBuyRate)).ToString("0.00", CultureInfo.InvariantCulture)} 金" : "当前净收益不为正，无法计算金币效率。";
-            target.SetResult($"{(roi >= 0 ? "+" : string.Empty)}{roi.ToString("0.00", CultureInfo.InvariantCulture)}%", $"{(profitInBuy >= 0 ? "+" : string.Empty)}{FormatDecimal(profitInBuy)} {pair.QuoteItem.Name}", $"{FormatDecimal(gold)} 金", efficiency, profitable);
+            var goldEfficiency = profitable ? gold / (profitInBuy / sellToBuyRate) : (decimal?)null;
+            var efficiency = goldEfficiency is { } value ? $"每赚 1 {pair.BaseItem.Name} 约消耗 {value.ToString("0.00", CultureInfo.InvariantCulture)} 金" : "当前净收益不为正，无法计算金币转化率。";
+            target.SetResult($"{(roi >= 0 ? "+" : string.Empty)}{roi.ToString("0.00", CultureInfo.InvariantCulture)}%", $"{(profitInBuy >= 0 ? "+" : string.Empty)}{FormatDecimal(profitInBuy)} {pair.QuoteItem.Name}", $"{FormatDecimal(gold)} 金", efficiency, profitable, roi, goldEfficiency, pair.BaseItem.Name);
         }
         OnPropertyChanged(nameof(SelectedPairSummary));
     }
@@ -391,7 +392,7 @@ public sealed class CalculatorPairRow : NotifyRow
 
 public sealed class CalculatorTargetRow : NotifyRow
 {
-    private CalculatorItemRow? _targetItem; private string _buyPriceText = string.Empty, _sellPriceText = string.Empty, _roiText = "待计算", _netProfitText = "--", _totalGoldCostText = "--", _hint = string.Empty; private bool _isProfitable;
+    private CalculatorItemRow? _targetItem; private string _buyPriceText = string.Empty, _sellPriceText = string.Empty, _roiText = "待计算", _netProfitText = "--", _totalGoldCostText = "--", _goldEfficiencyText = "--", _hint = string.Empty; private bool _isProfitable; private decimal? _roiValue, _goldEfficiencyValue;
     public CalculatorTargetRow(IReadOnlyDictionary<string, string>? pricesByCurrencyId = null)
     {
         PricesByCurrencyId = pricesByCurrencyId is null ? new Dictionary<string, string>() : new Dictionary<string, string>(pricesByCurrencyId);
@@ -431,6 +432,11 @@ public sealed class CalculatorTargetRow : NotifyRow
     public string RoiText { get => _roiText; private set => SetProperty(ref _roiText, value); }
     public string NetProfitText { get => _netProfitText; private set => SetProperty(ref _netProfitText, value); }
     public string TotalGoldCostText { get => _totalGoldCostText; private set => SetProperty(ref _totalGoldCostText, value); }
+    public string GoldEfficiencyText { get => _goldEfficiencyText; private set => SetProperty(ref _goldEfficiencyText, value); }
+    public decimal? RoiValue { get => _roiValue; private set { if (SetProperty(ref _roiValue, value)) { OnPropertyChanged(nameof(IsPositiveRoi)); OnPropertyChanged(nameof(IsNegativeRoi)); } } }
+    public decimal? GoldEfficiencyValue { get => _goldEfficiencyValue; private set => SetProperty(ref _goldEfficiencyValue, value); }
+    public bool IsPositiveRoi => RoiValue > 0;
+    public bool IsNegativeRoi => RoiValue < 0;
     public string Hint { get => _hint; private set => SetProperty(ref _hint, value); }
     public bool IsProfitable { get => _isProfitable; private set => SetProperty(ref _isProfitable, value); }
     public void SetPrice(string currencyId, string price) => PricesByCurrencyId[currencyId] = price;
@@ -460,12 +466,12 @@ public sealed class CalculatorTargetRow : NotifyRow
         HighestSellPriceText = Read(pair.BaseItem!.Id, "sell", "high", false);
         LowestSellPriceText = Read(pair.BaseItem.Id, "sell", "low", true);
     }
-    public void SetResult(string roi, string netProfit, string totalGoldCost, string hint, bool isProfitable) { RoiText = roi; NetProfitText = netProfit; TotalGoldCostText = totalGoldCost; Hint = hint; IsProfitable = isProfitable; }
+    public void SetResult(string roi, string netProfit, string totalGoldCost, string hint, bool isProfitable, decimal? roiValue = null, decimal? goldEfficiencyValue = null, string? sellCurrency = null) { RoiText = roi; NetProfitText = netProfit; TotalGoldCostText = totalGoldCost; Hint = hint; IsProfitable = isProfitable; RoiValue = roiValue; GoldEfficiencyValue = goldEfficiencyValue; GoldEfficiencyText = goldEfficiencyValue is { } value ? $"{value.ToString("0.00", CultureInfo.InvariantCulture)} 金/{sellCurrency}" : "--"; }
 }
 
 public abstract class NotifyRow : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    protected void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null) { if (EqualityComparer<T>.Default.Equals(field, value)) return; field = value; OnPropertyChanged(propertyName); }
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null) { if (EqualityComparer<T>.Default.Equals(field, value)) return false; field = value; OnPropertyChanged(propertyName); return true; }
 }
