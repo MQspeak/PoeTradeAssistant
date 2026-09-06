@@ -31,6 +31,8 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
     public MainWindow()
     {
         InitializeComponent();
+        foreach (var column in CalculatorTargetsGrid.Columns)
+            column.CanUserSort = column == CalculatorRoiColumn || column == CalculatorGoldEfficiencyColumn;
         _viewModel = new MainViewModel(new JsonProfileStorageService(GetCurrentScreenMetrics));
         _viewModel.Load();
         DataContext = _viewModel;
@@ -131,7 +133,10 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
     private void CalculatorTargetsGrid_Sorting(object sender, DataGridSortingEventArgs e)
     {
         if (e.Column != CalculatorRoiColumn && e.Column != CalculatorGoldEfficiencyColumn)
+        {
+            e.Handled = true;
             return;
+        }
 
         CalculatorRoiColumn.Header = "ROI";
         CalculatorGoldEfficiencyColumn.Header = "金币转化率";
