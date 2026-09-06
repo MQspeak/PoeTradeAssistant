@@ -128,6 +128,21 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
         }
     }
 
+    private void CalculatorTargetsGrid_Sorting(object sender, DataGridSortingEventArgs e)
+    {
+        if (e.Column != CalculatorRoiColumn && e.Column != CalculatorGoldEfficiencyColumn)
+            return;
+
+        CalculatorRoiColumn.Header = "ROI";
+        CalculatorGoldEfficiencyColumn.Header = "金币转化率";
+        var direction = e.Column.SortDirection == ListSortDirection.Ascending
+            ? ListSortDirection.Descending
+            : ListSortDirection.Ascending;
+        e.Column.Header = e.Column == CalculatorRoiColumn
+            ? $"ROI {(direction == ListSortDirection.Ascending ? "▲" : "▼")}"
+            : $"金币转化率 {(direction == ListSortDirection.Ascending ? "▲" : "▼")}";
+    }
+
     private void SaveProfile_Click(object sender, RoutedEventArgs e)
     {
         if (!_viewModel.TrySave(out var error))
