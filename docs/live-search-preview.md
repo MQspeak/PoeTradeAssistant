@@ -64,9 +64,9 @@ dotnet run --project .\tools\LiveSearch.Smoke -c Release
 - 登录验证通过后显示成功提示并最小化浏览器，验证按钮切换为红色断开按钮。
 - 启动全部切换为全部停止；单条停止关闭该监控页但保留列表项，其他监控继续运行。
 
-## POE2 简中翻译试用
+## POE1 / POE2 简中翻译
 
-内置 soifow/poe-ninja-translator 的英文到简中词库，匹配名称、价格通货及逐行详情。仅 POE2 启用；未匹配或数值占位符不一致时保留英文，详情附英文原文。数据来源与上游使用说明见模块 Data/TRANSLATION-SOURCE.md。词库约 1.03 MiB，无在线翻译调用。
+POE1 内置 Awakened PoE Trade 简中数据生成的英文到简中词库，POE2 内置 soifow/poe-ninja-translator 词库；两套数据按游戏隔离，匹配名称、价格通货及逐行详情。未匹配或数值占位符不一致时保留英文，详情附英文原文。数据来源与上游使用说明见模块 Data/TRANSLATION-SOURCE.md，无在线翻译调用。
 
 ## 浏览器隐藏与恢复
 

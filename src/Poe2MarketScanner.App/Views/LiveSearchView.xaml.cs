@@ -66,7 +66,7 @@ public partial class LiveSearchView : UserControl
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_closing || epoch != _epoch) return;
-                _hits.Insert(0, new(hit, _environment.Game == "poe2"));
+                _hits.Insert(0, new(hit, _environment.Game));
                 while (_hits.Count > 50) _hits.RemoveAt(_hits.Count - 1);
                 if (!hit.Initial) System.Media.SystemSounds.Asterisk.Play();
                 QueueAutoTravel(hit, epoch);
@@ -434,15 +434,13 @@ public partial class LiveSearchView : UserControl
         public string RuntimeStatus => Active ? "运行中" : "已停止";
     }
 
-    private sealed class SearchHitItem(SearchHit hit, bool translate) : INotifyPropertyChanged
+    private sealed class SearchHitItem(SearchHit hit, string game) : INotifyPropertyChanged
     {
         private bool _read;
         public SearchHit Hit { get; } = hit;
-        public string DisplayTitle { get; } = translate ? ChineseTranslator.Instance.Translate(hit.Title) : hit.Title;
-        public string DisplayPrice { get; } = translate ? ChineseTranslator.Instance.Translate(hit.Price) : hit.Price;
-        public string DisplayDetail { get; } = translate
-            ? ChineseTranslator.Instance.Translate(hit.Detail) + "\n\n—— 英文原文 ——\n" + hit.Detail
-            : hit.Detail;
+        public string DisplayTitle { get; } = ChineseTranslator.Instance.Translate(hit.Title, game);
+        public string DisplayPrice { get; } = ChineseTranslator.Instance.Translate(hit.Price, game);
+        public string DisplayDetail { get; } = ChineseTranslator.Instance.Translate(hit.Detail, game) + "\n\n—— 英文原文 ——\n" + hit.Detail;
         public bool Read
         {
             get => _read;
