@@ -53,6 +53,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ObservableCollection<AnchorEntry> AnchorEntries { get; private set; } = new();
     public ObservableCollection<OcrRegionSettingsEntry> OcrRegionEntries { get; private set; } = new();
     public ObservableCollection<string> QueryItems { get; } = new();
+    public ObservableCollection<QueryItemEntry> QueryItemEntries { get; } = new();
+    public int EnabledQueryItemCount => QueryItemEntries.Count(item => item.IsEnabled);
     public ObservableCollection<OcrDebugRegionResult> DebugRegions { get; } = new();
     public ObservableCollection<TradeModeOption> TradeModes { get; } = new();
     public AppProfile Profile { get; private set; } = AppProfileFactory.CreateDefault();
@@ -277,6 +279,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         Profile.QueryList.SourceFile = QuerySourceFile;
         Profile.QueryList.Items = QueryItems.ToList();
+        Profile.QueryList.DisabledItems = QueryItemEntries
+            .Where(item => !item.IsEnabled)
+            .Select(item => item.Name)
+            .ToList();
         Profile.Regions = RegionEntries.ToDictionary(item => item.Key, item => item.Region);
         Profile.Anchors = AnchorEntries.ToDictionary(item => item.Key, item => item.Anchor);
         Profile.Ocr.RegionOverrides = OcrRegionEntries.ToDictionary(item => item.Key, item => item.Settings);
@@ -291,9 +297,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             .ToList();
 
         QueryItems.Clear();
+        QueryItemEntries.Clear();
         foreach (var item in items)
         {
             QueryItems.Add(item);
+            QueryItemEntries.Add(CreateQueryItemEntry(item, true));
         }
 
         QuerySourceFile = filePath;
@@ -345,6 +353,27 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void NotifyLayoutChanged()
     {
         LayoutChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void RemoveQueryItem(QueryItemEntry? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        QueryItemEntries.Remove(item);
+        QueryItems.Remove(item.Name);
+        OnPropertyChanged(nameof(EnabledQueryItemCount));
+    }
+
+    public void ToggleAllQueryItems()
+    {
+        var enableAll = QueryItemEntries.Any(item => !item.IsEnabled);
+        foreach (var item in QueryItemEntries)
+        {
+            item.IsEnabled = enableAll;
+        }
     }
 
     private void RefreshTradeModes()
@@ -444,9 +473,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 GetOrCreateRegionOverride(item.Key))));
 
         QueryItems.Clear();
+        QueryItemEntries.Clear();
+        var disabledItems = Profile.QueryList.DisabledItems.ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var item in Profile.QueryList.Items)
         {
             QueryItems.Add(item);
+            QueryItemEntries.Add(CreateQueryItemEntry(item, !disabledItems.Contains(item)));
         }
 
         SubscribeLayoutEvents();
@@ -461,7 +493,22 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(OutputDirectory));
         OnPropertyChanged(nameof(RecognizeGoldCost));
         OnPropertyChanged(nameof(IsGoldCostInputEnabled));
+        OnPropertyChanged(nameof(QueryItemEntries));
+        OnPropertyChanged(nameof(EnabledQueryItemCount));
         ParseOcrPreview();
+    }
+
+    private QueryItemEntry CreateQueryItemEntry(string name, bool isEnabled)
+    {
+        var entry = new QueryItemEntry(name, isEnabled);
+        entry.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(QueryItemEntry.IsEnabled))
+            {
+                OnPropertyChanged(nameof(EnabledQueryItemCount));
+            }
+        };
+        return entry;
     }
 
     private OcrRegionSettings GetOrCreateRegionOverride(string key)
@@ -518,6 +565,25 @@ public sealed record AnchorEntry(string Key, AnchorPoint Anchor);
 public sealed record OcrRegionSettingsEntry(string Key, string Name, OcrRegionSettings Settings);
 
 public sealed record TradeModeOption(string Key, string DisplayName);
+
+public sealed class QueryItemEntry : ObservableModel
+{
+    private bool _isEnabled;
+
+    public QueryItemEntry(string name, bool isEnabled)
+    {
+        Name = name;
+        _isEnabled = isEnabled;
+    }
+
+    public string Name { get; }
+
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set => SetProperty(ref _isEnabled, value);
+    }
+}
 
 public enum GameMode { Poe1, Poe2 }
 

@@ -198,6 +198,31 @@ public sealed class MainViewModelTests
     }
 
     [Fact]
+    public void ToggleAllQueryItems_ShouldSelectAllThenClearAll()
+    {
+        var viewModel = new MainViewModel(new InMemoryProfileStorageService());
+        var queryFile = CreateTempQueryFile("Divine Orb", "Exalted Orb");
+
+        try
+        {
+            viewModel.Load();
+            viewModel.ImportQueryFile(queryFile);
+            viewModel.QueryItemEntries[0].IsEnabled = false;
+
+            viewModel.ToggleAllQueryItems();
+            Assert.All(viewModel.QueryItemEntries, item => Assert.True(item.IsEnabled));
+
+            viewModel.ToggleAllQueryItems();
+            Assert.All(viewModel.QueryItemEntries, item => Assert.False(item.IsEnabled));
+            Assert.Equal(0, viewModel.EnabledQueryItemCount);
+        }
+        finally
+        {
+            File.Delete(queryFile);
+        }
+    }
+
+    [Fact]
     public void TrySave_ShouldReturnFalseWhenStorageFails()
     {
         var viewModel = new MainViewModel(new ThrowingProfileStorageService());

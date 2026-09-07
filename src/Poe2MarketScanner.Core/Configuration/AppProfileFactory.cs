@@ -78,6 +78,7 @@ public static class AppProfileFactory
             {
                 Reserved = true,
                 RecognizeGoldCost = true,
+                SkipCurrentPairRatioRecognition = false,
                 CommonDelayMs = 500,
                 ClickDelayMs = 120,
                 InputDelayMs = 80

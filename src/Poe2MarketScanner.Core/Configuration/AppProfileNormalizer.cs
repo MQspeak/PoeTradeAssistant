@@ -19,6 +19,8 @@ public static class AppProfileNormalizer
         profile.OutputDirectory ??= defaults.OutputDirectory;
         profile.SelectedTradeModeKey = TradeModeCatalog.Resolve(profile.SelectedTradeModeKey).Key;
         profile.QueryList ??= defaults.QueryList;
+        profile.QueryList.Items ??= new List<string>();
+        profile.QueryList.DisabledItems ??= new List<string>();
         profile.Automation ??= defaults.Automation;
         profile.Ocr ??= defaults.Ocr;
         profile.Regions ??= new Dictionary<string, ScreenRegion>();

@@ -72,6 +72,28 @@ public sealed class MainWindowTextTests
     }
 
     [Fact]
+    public void NativeCalculator_ShouldKeepExistingPairRate_WhenScanSkippedRatioRecognition()
+    {
+        var calculator = new NativeCalculatorViewModel(Path.Combine(Path.GetTempPath(), $"poe-calculator-{Guid.NewGuid():N}.json"));
+        calculator.ImportScanDocument(new PriceScanDocument
+        {
+            Pair = new TradePairSnapshot
+            {
+                BuyCurrency = "D",
+                SellCurrency = "C",
+                CurrentRatio = new NormalizedRatio { Left = 10m, Right = 1m, RightPerLeft = 0.1m }
+            }
+        });
+
+        calculator.ImportScanDocument(new PriceScanDocument
+        {
+            Pair = new TradePairSnapshot { BuyCurrency = "D", SellCurrency = "C" }
+        });
+
+        Assert.Equal("0.1", calculator.SelectedPair!.RateText);
+    }
+
+    [Fact]
     public void NativeCalculator_ShouldUseItemSelectionsAndCachePricesPerCurrency()
     {
         var calculator = new NativeCalculatorViewModel(Path.Combine(Path.GetTempPath(), $"poe-calculator-{Guid.NewGuid():N}.json"));

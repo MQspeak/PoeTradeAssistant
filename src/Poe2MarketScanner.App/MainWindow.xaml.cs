@@ -2,12 +2,14 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using FluentWindow = Wpf.Ui.Controls.FluentWindow;
@@ -20,6 +22,13 @@ namespace Poe2MarketScanner.App;
 
 public partial class MainWindow : FluentWindow, IOverlayCaptureHost
 {
+    private const int StartScanHotKeyId = 0x5107;
+    private const int StopScanHotKeyId = 0x5108;
+    private const int WmHotKey = 0x0312;
+    private const uint ModNoRepeat = 0x4000;
+    private const uint VirtualKeyF7 = 0x76;
+    private const uint VirtualKeyF8 = 0x77;
+
     private readonly MainViewModel _viewModel;
     private CancellationTokenSource? _automationCancellation;
     private OverlayWindow? _overlayWindow;
@@ -27,6 +36,9 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
     private bool _closeApproved;
     private TaskCompletionSource? _automationCompletion;
     private TaskCompletionSource? _calculatorImportCompletion;
+    private HwndSource? _windowSource;
+    private bool _startHotKeyRegistered;
+    private bool _stopHotKeyRegistered;
 
     public MainWindow()
     {
@@ -49,6 +61,38 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
     public bool IsOverlayVisible => _overlayWindow?.IsVisible == true;
 
     public bool IsOverlayEditing { get; private set; }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var handle = new WindowInteropHelper(this).Handle;
+        _windowSource = HwndSource.FromHwnd(handle);
+        _windowSource?.AddHook(HandleWindowMessage);
+        _startHotKeyRegistered = RegisterHotKey(handle, StartScanHotKeyId, ModNoRepeat, VirtualKeyF7);
+        _stopHotKeyRegistered = RegisterHotKey(handle, StopScanHotKeyId, ModNoRepeat, VirtualKeyF8);
+    }
+
+    private IntPtr HandleWindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message != WmHotKey)
+        {
+            return IntPtr.Zero;
+        }
+
+        switch (wParam.ToInt32())
+        {
+            case StartScanHotKeyId:
+                RunSellAutomation_Click(this, new RoutedEventArgs());
+                handled = true;
+                break;
+            case StopScanHotKeyId:
+                _automationCancellation?.Cancel();
+                handled = true;
+                break;
+        }
+
+        return IntPtr.Zero;
+    }
 
     protected override void OnClosing(CancelEventArgs e)
     {
@@ -117,9 +161,23 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
 
     protected override void OnClosed(EventArgs e)
     {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (_startHotKeyRegistered)
+            UnregisterHotKey(handle, StartScanHotKeyId);
+        if (_stopHotKeyRegistered)
+            UnregisterHotKey(handle, StopScanHotKeyId);
+        _windowSource?.RemoveHook(HandleWindowMessage);
         _overlayWindow?.Close();
         base.OnClosed(e);
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RegisterHotKey(IntPtr windowHandle, int id, uint modifiers, uint virtualKey);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnregisterHotKey(IntPtr windowHandle, int id);
 
     private void ImportProfile_Click(object sender, RoutedEventArgs e)
     {
@@ -165,6 +223,32 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
         }
     }
 
+    private void RemoveQueryItem_Click(object sender, RoutedEventArgs e) =>
+        _viewModel.RemoveQueryItem((sender as FrameworkElement)?.DataContext as QueryItemEntry);
+
+    private void ToggleAllQueryItems_Click(object sender, RoutedEventArgs e) =>
+        _viewModel.ToggleAllQueryItems();
+
+    private void QueryItemRow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var source = e.OriginalSource as DependencyObject;
+        while (source is not null && !ReferenceEquals(source, sender))
+        {
+            if (source is Button or CheckBox)
+            {
+                return;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        if ((sender as FrameworkElement)?.DataContext is QueryItemEntry item)
+        {
+            item.IsEnabled = !item.IsEnabled;
+            e.Handled = true;
+        }
+    }
+
     private void ResetProfile_Click(object sender, RoutedEventArgs e)
     {
         var result = MessageBox.Show(
@@ -199,7 +283,7 @@ public partial class MainWindow : FluentWindow, IOverlayCaptureHost
             return;
         }
 
-        var startError = AutomationPreflightValidator.ValidateStartRequirements(_viewModel.Profile, _viewModel.QueryItems.Count)
+        var startError = AutomationPreflightValidator.ValidateStartRequirements(_viewModel.Profile, _viewModel.EnabledQueryItemCount)
             ?? AutomationPreflightValidator.Validate(_viewModel.Profile);
         if (startError is not null)
         {

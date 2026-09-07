@@ -197,12 +197,14 @@ public sealed class QueryListSettings
 {
     public string SourceFile { get; set; } = "currencies.txt";
     public List<string> Items { get; set; } = new();
+    public List<string> DisabledItems { get; set; } = new();
 }
 
 public sealed class AutomationSettings : ObservableModel
 {
     private bool _reserved = true;
     private bool _recognizeGoldCost = true;
+    private bool _skipCurrentPairRatioRecognition;
     private int _commonDelayMs = 500;
     private int _clickDelayMs = 120;
     private int _inputDelayMs = 80;
@@ -217,6 +219,12 @@ public sealed class AutomationSettings : ObservableModel
     {
         get => _recognizeGoldCost;
         set => SetProperty(ref _recognizeGoldCost, value);
+    }
+
+    public bool SkipCurrentPairRatioRecognition
+    {
+        get => _skipCurrentPairRatioRecognition;
+        set => SetProperty(ref _skipCurrentPairRatioRecognition, value);
     }
 
     public int CommonDelayMs

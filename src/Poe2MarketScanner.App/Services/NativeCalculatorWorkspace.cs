@@ -161,17 +161,25 @@ public sealed class NativeCalculatorViewModel : INotifyPropertyChanged
         var buyCurrency = PriceScanDocumentAdapter.NormalizeCurrency(document.Pair.BuyCurrency);
         var sellCurrency = PriceScanDocumentAdapter.NormalizeCurrency(document.Pair.SellCurrency);
         var pairRate = document.Pair.CurrentRatio.RightPerLeft;
-        if (string.IsNullOrWhiteSpace(buyCurrency) || string.IsNullOrWhiteSpace(sellCurrency) || pairRate is null or <= 0) throw new InvalidOperationException("V2 扫描结果缺少有效交易对或当前比例。");
+        if (string.IsNullOrWhiteSpace(buyCurrency) || string.IsNullOrWhiteSpace(sellCurrency)) throw new InvalidOperationException("V2 扫描结果缺少有效交易对。");
 
         var buyItem = EnsureItem(buyCurrency, CalculatorItemCategory.Currency, "0");
         var sellItem = EnsureItem(sellCurrency, CalculatorItemCategory.Currency, "0");
         var pair = Pairs.FirstOrDefault(row => ReferenceEquals(row.BaseItem, sellItem) && ReferenceEquals(row.QuoteItem, buyItem));
         if (pair is null)
         {
+            if (pairRate is null or <= 0) throw new InvalidOperationException("扫描已跳过基础交易对比例识别；请先在计算器中配置该交易对汇率。");
             pair = new CalculatorPairRow { BaseItem = sellItem, QuoteItem = buyItem };
             Pairs.Add(pair);
         }
-        pair.RateText = FormatDecimal(pairRate.Value);
+        if (pairRate is > 0)
+        {
+            pair.RateText = FormatDecimal(pairRate.Value);
+        }
+        else if (!TryPositive(pair.RateText, out _))
+        {
+            throw new InvalidOperationException("扫描已跳过基础交易对比例识别；请先在计算器中配置该交易对汇率。");
+        }
 
         CacheVisiblePrices(SelectedPair);
         var importedCount = 0;

@@ -33,8 +33,9 @@ public sealed class SellQueryAutomationRunner
         ScanGoldCostTable? goldCosts = null)
     {
         goldCosts ??= new ScanGoldCostTable();
+        var disabledItems = profile.QueryList.DisabledItems.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var queryItems = profile.QueryList.Items
-            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .Where(item => !string.IsNullOrWhiteSpace(item) && !disabledItems.Contains(item))
             .ToList();
 
         if (queryItems.Count == 0)
@@ -62,7 +63,10 @@ public sealed class SellQueryAutomationRunner
             });
         }
 
-        await CaptureCurrentPairRatioAsync(profile, mode, result, cancellationToken);
+        if (!profile.Automation.SkipCurrentPairRatioRecognition)
+        {
+            await CaptureCurrentPairRatioAsync(profile, mode, result, cancellationToken);
+        }
         foreach (var item in result.Items)
             foreach (var key in new[] { "highestBuyPrice", "lowestBuyPrice", "highestSellPrice", "lowestSellPrice" })
                 item.PriceObservations[key] = new ScanPriceObservation();
@@ -194,9 +198,9 @@ public sealed class SellQueryAutomationRunner
             await SearchCurrencyAsync(profile, "leftCurrency", item.CurrencyName, cancellationToken);
             await SetQuantityAsync(profile, "leftInput", cancellationToken);
             var readResult = await ReadUntilStableAsync(profile, cancellationToken);
-            item.HighestSellPrice = RecordPrice(item, "highestSellPrice", readResult, takeLeft: false);
+            item.HighestSellPrice = RecordPrice(item, "highestSellPrice", readResult, takeLeft: false, calculateUnitPrice: true);
             var lowestRead = await ReadSwappedRatioAsync(profile, cancellationToken);
-            item.LowestSellPrice = RecordPrice(item, "lowestSellPrice", lowestRead, takeLeft: true);
+            item.LowestSellPrice = RecordPrice(item, "lowestSellPrice", lowestRead, takeLeft: true, calculateUnitPrice: true);
 
             item.SellRatioRaw = readResult.RatioRaw;
             item.SellRatioNormalized = readResult.RatioNormalized;
@@ -226,7 +230,12 @@ public sealed class SellQueryAutomationRunner
         }
     }
 
-    private static decimal? RecordPrice(SellQueryItemResult item, string key, SellQueryOcrResult read, bool takeLeft)
+    private static decimal? RecordPrice(
+        SellQueryItemResult item,
+        string key,
+        SellQueryOcrResult read,
+        bool takeLeft,
+        bool calculateUnitPrice = false)
     {
         var parsed = OcrTextParser.ParseRatio(read.RatioNormalized);
         var success = read.Status == "ok" && parsed.Success && parsed.RatioLeft > 0 && parsed.RatioRight > 0;
@@ -237,8 +246,21 @@ public sealed class SellQueryAutomationRunner
             Status = success ? "ok" : read.Status == "ok" ? "parse_failed" : read.Status,
             ErrorMessage = success ? null : read.ErrorMessage ?? "invalid_price_ratio"
         };
-        // M:N is interpreted by currency position, not by division or inversion.
-        return success ? (takeLeft ? parsed.RatioLeft : parsed.RatioRight) : null;
+        if (!success)
+        {
+            return null;
+        }
+
+        if (calculateUnitPrice)
+        {
+            // Normal: target M is on the left and sell currency N is on the right => N / M.
+            // Swapped: sell currency M is on the left and target N is on the right => M / N.
+            return takeLeft
+                ? parsed.RatioLeft / parsed.RatioRight
+                : parsed.RatioRight / parsed.RatioLeft;
+        }
+
+        return takeLeft ? parsed.RatioLeft : parsed.RatioRight;
     }
 
     private async Task<SellQueryOcrResult> ReadSwappedRatioAsync(AppProfile profile, CancellationToken cancellationToken)

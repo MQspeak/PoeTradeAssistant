@@ -11,6 +11,39 @@ namespace Poe2MarketScanner.App.Tests;
 
 public sealed class SellQueryAutomationRunnerTests
 {
+    [Fact]
+    public async Task RunAsync_SkipsCurrentPairRatioRecognition_WhenConfigured()
+    {
+        var profile = AppProfileFactory.CreateDefault();
+        profile.Automation.SkipCurrentPairRatioRecognition = true;
+        profile.QueryList.Items.Add("Example");
+        var reader = new SelectiveGoldReader();
+        var runner = new SellQueryAutomationRunner(new FakeInputAutomationRunner(), reader, new FakeQueryResultWriter());
+
+        var result = await runner.RunAsync(profile, CancellationToken.None);
+
+        Assert.Equal(string.Empty, result.Items[0].CurrentPairRatioNormalized);
+        Assert.Equal(4, reader.RatioReads);
+    }
+
+    [Fact]
+    public async Task RunAsync_SkipsDisabledQueryItems()
+    {
+        var profile = AppProfileFactory.CreateDefault();
+        profile.QueryList.Items.Add("Disabled");
+        profile.QueryList.Items.Add("Enabled");
+        profile.QueryList.DisabledItems.Add("disabled");
+        var runner = new SellQueryAutomationRunner(
+            new FakeInputAutomationRunner(),
+            new SelectiveGoldReader(),
+            new FakeQueryResultWriter());
+
+        var result = await runner.RunAsync(profile, CancellationToken.None);
+
+        Assert.Single(result.Items);
+        Assert.Equal("Enabled", result.Items[0].CurrencyName);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

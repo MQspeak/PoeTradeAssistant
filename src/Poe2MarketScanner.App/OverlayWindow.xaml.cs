@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using Poe2MarketScanner.Core.Configuration;
 
 namespace Poe2MarketScanner.App;
@@ -14,7 +15,11 @@ public partial class OverlayWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<RegionEntry, RegionVisuals> _regionVisuals = new();
     private readonly Dictionary<AnchorEntry, FrameworkElement> _anchorVisuals = new();
+    private readonly DispatcherTimer _hoverTimer;
     private DragContext? _dragContext;
+    private RegionEntry? _hoveredRegion;
+    private Point _lastPointerPosition;
+    private DateTime _stationarySince;
 
     public OverlayWindow(MainViewModel viewModel)
     {
@@ -28,6 +33,8 @@ public partial class OverlayWindow : Window
 
         RenderProfile();
         _viewModel.LayoutChanged += HandleLayoutChanged;
+        _hoverTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Input, HandleHoverTimerTick, Dispatcher);
+        _hoverTimer.Start();
         SetEditing(true);
     }
 
@@ -41,6 +48,7 @@ public partial class OverlayWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _hoverTimer.Stop();
         _viewModel.LayoutChanged -= HandleLayoutChanged;
         base.OnClosed(e);
     }
@@ -62,6 +70,7 @@ public partial class OverlayWindow : Window
             _regionVisuals[regionEntry] = visuals;
             OverlayCanvas.Children.Add(visuals.Container);
             OverlayCanvas.Children.Add(visuals.ResizeHandle);
+            OverlayCanvas.Children.Add(visuals.Label);
             UpdateRegionVisual(regionEntry);
         }
 
@@ -102,19 +111,19 @@ public partial class OverlayWindow : Window
             Background = new SolidColorBrush(brush.Color) { Opacity = 0.12 }
         });
 
-        container.Children.Add(new Border
+        var label = new Border
         {
             Background = brush,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top,
             Padding = new Thickness(8, 4, 8, 4),
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false,
             Child = new TextBlock
             {
                 Text = entry.Region.Name,
                 Foreground = Brushes.Black,
                 FontWeight = FontWeights.Bold
             }
-        });
+        };
 
         var resizeHandle = new Ellipse
         {
@@ -134,7 +143,76 @@ public partial class OverlayWindow : Window
         resizeHandle.MouseMove += (_, e) => ContinueDrag(e);
         resizeHandle.MouseLeftButtonUp += (_, e) => EndDrag(resizeHandle);
 
-        return new RegionVisuals(container, resizeHandle);
+        return new RegionVisuals(container, resizeHandle, label);
+    }
+
+    private void HandleHoverTimerTick(object? sender, EventArgs e)
+    {
+        var pointer = Mouse.GetPosition(this);
+        var region = FindRegionAt(pointer);
+        if (region is null)
+        {
+            ResetRegionHover(null, pointer);
+            return;
+        }
+
+        var moved = Math.Abs(pointer.X - _lastPointerPosition.X) > 2 ||
+                    Math.Abs(pointer.Y - _lastPointerPosition.Y) > 2;
+        if (!ReferenceEquals(region, _hoveredRegion) || moved)
+        {
+            ResetRegionHover(region, pointer);
+            return;
+        }
+
+        if (DateTime.UtcNow - _stationarySince >= TimeSpan.FromMilliseconds(500))
+        {
+            ShowRegionLabel(region);
+        }
+    }
+
+    private RegionEntry? FindRegionAt(Point pointer)
+    {
+        foreach (var entry in _viewModel.RegionEntries)
+        {
+            var left = entry.Region.X - Left;
+            var top = entry.Region.Y - Top;
+            if (pointer.X >= left && pointer.X <= left + entry.Region.Width &&
+                pointer.Y >= top && pointer.Y <= top + entry.Region.Height)
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    private void ResetRegionHover(RegionEntry? region, Point pointer)
+    {
+        foreach (var visuals in _regionVisuals.Values)
+        {
+            visuals.Label.Visibility = Visibility.Collapsed;
+        }
+
+        _hoveredRegion = region;
+        _lastPointerPosition = pointer;
+        _stationarySince = DateTime.UtcNow;
+    }
+
+    private void ShowRegionLabel(RegionEntry entry)
+    {
+        var label = _regionVisuals[entry].Label;
+        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var left = entry.Region.X - Left;
+        var regionTop = entry.Region.Y - Top;
+        var top = regionTop - label.DesiredSize.Height - 6;
+        if (top < 0)
+        {
+            top = regionTop + entry.Region.Height + 6;
+        }
+
+        Canvas.SetLeft(label, Math.Max(0, Math.Min(left, ActualWidth - label.DesiredSize.Width)));
+        Canvas.SetTop(label, top);
+        label.Visibility = Visibility.Visible;
     }
 
     private FrameworkElement CreateAnchorElement(AnchorEntry entry)
@@ -214,7 +292,7 @@ public partial class OverlayWindow : Window
 
             case DragMode.ResizeRegion:
                 _dragContext.RegionEntry!.Region.Width = Math.Max(40, _dragContext.StartWidth + delta.X);
-                _dragContext.RegionEntry.Region.Height = Math.Max(40, _dragContext.StartHeight + delta.Y);
+                _dragContext.RegionEntry.Region.Height = Math.Max(1, _dragContext.StartHeight + delta.Y);
                 UpdateRegionVisual(_dragContext.RegionEntry);
                 break;
 
@@ -264,7 +342,7 @@ public partial class OverlayWindow : Window
         return new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
     }
 
-    private sealed record RegionVisuals(FrameworkElement Container, FrameworkElement ResizeHandle);
+    private sealed record RegionVisuals(FrameworkElement Container, FrameworkElement ResizeHandle, FrameworkElement Label);
 
     private sealed class DragContext
     {

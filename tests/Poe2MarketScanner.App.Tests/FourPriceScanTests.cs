@@ -15,7 +15,7 @@ namespace Poe2MarketScanner.App.Tests;
 public sealed class FourPriceScanTests
 {
     [Fact]
-    public async Task ScanExportsExactComponentsAndCalculatorUsesAllFourModes()
+    public async Task ScanExportsBuyComponentsAndSellUnitPricesAndCalculatorUsesAllFourModes()
     {
         var directory = Path.Combine(Path.GetTempPath(), "four-price-" + Guid.NewGuid().ToString("N"));
         try
@@ -27,8 +27,8 @@ public sealed class FourPriceScanTests
             var item = Assert.Single(result.Items);
             Assert.Equal(10m, item.HighestBuyPrice);
             Assert.Equal(8m, item.LowestBuyPrice);
-            Assert.Equal(4m, item.HighestSellPrice);
-            Assert.Equal(3m, item.LowestSellPrice);
+            Assert.Equal(4m / 7m, item.HighestSellPrice);
+            Assert.Equal(1m / 3m, item.LowestSellPrice);
             Assert.Equal(new[] { 0, 0, 1, 2, 3 }, reader.SwapsAtRead);
             Assert.Equal(4, input.Steps.Count(step => step.StartsWith("CtrlClick")));
 
@@ -40,7 +40,7 @@ public sealed class FourPriceScanTests
             Assert.Equal(10m, exported.RootElement.GetProperty("items")[0].GetProperty("highestBuyPrice").GetDecimal());
             var calculator = new NativeCalculatorViewModel(Path.Combine(directory, "workspace.json"));
             calculator.ImportScanDocument(document);
-            foreach (var (mode, roi) in new[] { ("高买低卖", "+20.00%"), ("高买高卖", "+60.00%"), ("低买高卖", "+100.00%"), ("低买低卖", "+50.00%") })
+            foreach (var (mode, roi) in new[] { ("高买低卖", "-86.67%"), ("高买高卖", "-77.14%"), ("低买高卖", "-71.43%"), ("低买低卖", "-83.33%") })
             {
                 calculator.ProfitMode = mode;
                 Assert.Equal(roi, calculator.Targets[0].RoiText);
@@ -61,12 +61,12 @@ public sealed class FourPriceScanTests
             Assert.Null(result.Items[0].LowestBuyPrice);
             Assert.Equal("parse_failed", result.Items[0].PriceObservations["lowestBuyPrice"].Status);
             Assert.Equal(4, input.Steps.Count(step => step.StartsWith("CtrlClick")));
-            Assert.Equal(3m, result.Items[0].LowestSellPrice);
+            Assert.Equal(1m / 3m, result.Items[0].LowestSellPrice);
             var calculator = new NativeCalculatorViewModel(Path.Combine(directory, "workspace.json"));
             var document = JsonSerializer.Deserialize<PriceScanDocument>(File.ReadAllText(result.OutputPath))!;
             calculator.ImportScanDocument(document);
             calculator.ProfitMode = "高买低卖";
-            Assert.Equal("+20.00%", calculator.Targets[0].RoiText);
+            Assert.Equal("-86.67%", calculator.Targets[0].RoiText);
             calculator.ProfitMode = "低买低卖";
             Assert.Equal("", calculator.Targets[0].LowestBuyPriceText);
             Assert.Equal("待计算", calculator.Targets[0].RoiText);
