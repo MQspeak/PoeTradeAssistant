@@ -1,17 +1,17 @@
 # PoeTradeAssistant 软件设计文档（SDD）
 
-> 2026-09-05 分支增量：`codex/live-search-system-browser` 已新增原生实时搜索试用模块，优先使用系统 Chrome、缺失时回退 Edge。实现、依赖和验证边界见 [实时搜索试用说明](live-search-preview.md)。下文 v1.1 描述扫描器与计算器基线；其中“单进程/无浏览器运行时”不适用于新增监控模块。监控报价尚不导入扫描数据合约或计算器。
+> 当前基准分支为 main，整合截至 aed0dc3 的已完成开发。本文统一描述三个原生模块；实时搜索操作及验证边界见 [实时搜索说明](live-search-preview.md)。
 
 - 文档状态：As-built（依据当前源码）
-- 文档版本：1.1
-- 更新日期：2026-09-04
+- 文档版本：1.2
+- 更新日期：2026-09-07
 - 适用平台：Windows 10 19041 及以上
 
 ## 1. 目的与范围
 
-PoeTradeAssistant 是一个面向 Path of Exile 1/2 市场交易场景的本地桌面工具，将“屏幕自动化扫价、OCR 解析、版本化价格数据、套利收益计算”整合在一个 WPF 应用中。
+PoeTradeAssistant 是一个面向 Path of Exile 1/2 市场交易场景的本地桌面工具，将“屏幕自动化扫价、OCR 解析、版本化价格数据、套利收益计算、实时搜索”整合在一个 WPF 应用中。
 
-本文描述当前实际实现，而非未来规划。当前正式交付物是 `PoeTradeAssistant.exe`；`web/calculator` 是旧收益计算器的迁移参考，不进入解决方案、构建产物或运行链路。
+本文描述当前实际实现，而非未来规划。当前正式交付物是 `PoeTradeAssistant.exe` 及其运行依赖。旧 Web 计算器、旧扫描器设计和已完成的合并预研已移除，可从 aed0dc3 及此前 Git 历史恢复。
 
 ### 1.1 系统目标
 
@@ -23,14 +23,14 @@ PoeTradeAssistant 是一个面向 Path of Exile 1/2 市场交易场景的本地�
 
 ### 1.2 非目标
 
-- 不直接调用游戏或交易站 API。
+- 扫描器不直接调用游戏或交易站 API；实时搜索通过官方交易页面读取结果和执行页面前往操作。
 - 不提供云同步、账号系统或多人协作。
 - 不保证在非 Windows 平台运行。
 - 当前原生版本不包含旧 Web 工具中的符文套利、公式套利和完整三角套利页面。
 
 ## 2. 总体架构
 
-系统采用分层的单进程桌面架构：
+系统采用分层的 WPF 桌面架构。扫描器与计算器在宿主进程运行；实时搜索通过 Playwright Windows 驱动和 CDP 连接独立的本机 Chrome/Edge 进程：
 
 ```text
 WPF 界面 / MainWindow
@@ -53,7 +53,7 @@ ProjectOutputJsonWriter --> PriceScanDocument V2
                         PriceScanDocumentAdapter
 ```
 
-依赖方向保持为：`App -> ScannerIntegration -> Contracts`，同时 `App -> Core`、`ScannerIntegration -> Core`。`Core` 与 `Contracts` 不依赖 UI。
+依赖方向保持为：`App -> ScannerIntegration -> Contracts`，同时 `App -> Core`、`ScannerIntegration -> Core`。另有 `App -> LiveSearch -> Playwright`。`Core` 与 `Contracts` 不依赖 UI。实时搜索链路为 `LiveSearchView -> BrowserSession -> CDP -> 官方页面 -> cards.js -> SearchHit`，监控报价尚不导入扫描合约或计算器。
 
 ## 3. 代码组织
 
@@ -64,7 +64,8 @@ ProjectOutputJsonWriter --> PriceScanDocument V2
 | 数据合约 | `src/PoeTradeAssistant.Contracts` | `poe-trade-scan/v2` 及旧 V1 数据结构 |
 | 集成适配 | `src/PoeTradeAssistant.ScannerIntegration` | 扫描批次/V1 表格到 V2 合约的转换、币种名称归一化 |
 | 自动化测试 | `tests/*` | Core、App 和集成适配器的 xUnit 回归测试 |
-| 旧版参考 | `web/calculator` | React/Vite 及历史单页计算器的迁移参考，不参与正式运行 |
+| 实时搜索 | `src/PoeTradeAssistant.LiveSearch` | 浏览器连接与隐藏、监控会话、DOM 提取、链接存储和离线翻译 |
+| 浏览器冒烟测试 | `tools/LiveSearch.Smoke` | 系统浏览器与本地模拟页面验证 |
 | 发布脚本 | `scripts` | 全量测试/构建及 Windows 自包含打包 |
 
 ## 4. 关键组件设计
@@ -139,7 +140,7 @@ V2 顶层包含 `schemaVersion`、扫描时间、交易模式、基础交易对�
 
 V2 导入仅接收正确的 schema 版本和有效基础比例；旧数据仅导入状态为 `ok` 或 `imported-v1` 的条目；带 `priceObservations` 的新数据也允许导入部分失败条目。新扫描缺失报价会清空对应值，不以旧比例回填；无逐字段记录的旧文件仅回填默认高买低卖所需价格。空金币字段不覆盖已有成本。导入时复用同名实体和已有交易对，随后保存工作区。
 
-支持高买低卖（默认）、高买高卖、低买高卖、低买低卖四种盈利模式。切换模式后显示并编辑对应买卖价格，立即重算；报价按币种保存，模式与当前交易对随工作区持久化。当前模式缺少必要报价时显示“待计算”。ROI 与金币效率显示两位小数；界面主要展示 ROI 和计算提示，净利润与总金币成本保留在模型中，对应列隐藏。
+支持高买低卖（默认）、高买高卖、低买高卖、低买低卖四种盈利模式。切换模式后显示并编辑对应买卖价格，立即重算；报价按币种保存，模式与当前交易对随工作区持久化。当前模式缺少必要报价时显示“待计算”。ROI 与金币效率显示两位小数；表格展示 ROI 和金币转化率，正收益以颜色强调，净利润与总金币成本保留在模型中。仅 ROI 和金币转化率支持数值排序，表头以 ▲/▼ 显示方向，其余列禁止排序。
 
 当前计算公式（使用所选模式的买卖价，以买入币种为计价单位）：
 
@@ -156,11 +157,24 @@ ROI      = 净利润 / 标的买入价 * 100%
 
 工作区 schema 当前为 V2；加载器兼容旧 V1，并在迁移后立即保存为新结构。
 
+### 4.7 实时搜索与浏览器会话
+
+- TradeEnvironment 定义 POE1/POE2 × 国际服/国服四种环境，校验当前环境的 HTTPS 官方搜索 URL、赛季与搜索 ID。
+- SearchStorage 保存 V1 链接工作区，最多 200 条、同时启用最多 10 条，校验名称、唯一 ID 和 URL，采用临时文件刷新后替换。支持 V1 链接导入导出，不包含完整旧 state 迁移。
+- LocalBrowserConnection 优先连接 127.0.0.1:9222，支持环境变量 POE_TRADE_BROWSER_CDP_URL 覆盖。无可用实例时优先查找 Chrome、回退 Edge，使用环境专属 Profile 启动，不下载或捆绑 Chromium。
+- BrowserSession 管理登录验证、监控页面和卡片提取。初始快照仅展示，后续命中提示音，会话内按监控 ID 和结果 ID 去重。
+- 支持单条启动/停止、全部启动/停止、暂停采集、已读、悬停详情、稀有度颜色、手动前往、单次与持续自动前往。持续模式最小间隔可设 0–99 秒，初始快照不触发自动动作。
+- 仅隐藏本次由应用启动的浏览器，登录验证后及创建监控页时确保保持隐藏，可通过“显示浏览器”恢复。连接已有实例时保留窗口可见。关闭会话清理本功能创建的页面并断开连接、恢复隐藏窗口，不退出用户浏览器。
+- 断线取消自动前往并清理会话。界面操作上限 60 秒，关闭清理最多约 7 秒，前往请求最多 5 秒。浏览器连接期间禁止切换游戏或开始扫价，扫描期间禁止连接和前往。
+- ChineseTranslator 按游戏加载内嵌简中词库，翻译名称、通货和详情；未匹配或占位符不一致时保留英文，详情附原文。来源及许可保存在模块 Data 目录，不调用在线翻译。
+
 ## 5. 运行时数据与文件布局
+
+实时搜索根目录为 %LOCALAPPDATA%/PoeTradeAssistant/live-search，按游戏/区服隔离 workspace.json 与专用浏览器 Profile；连接已有实例时，登录状态取决于该实例。清理源码时保留用户配置、登录状态及已有发布产物。
 
 默认运行数据位于应用确定的配置根目录，并按 `poe1`、`poe2` 隔离。每个游戏模式保存扫描 profile 与 `calculator-workspace.json`。配置根目录的 `application-settings.json` 保存选中的游戏模式及金币/比例调试文本。扫描输出目录可配置：绝对路径直接使用，相对路径相对于项目/应用工作根目录解析。
 
-构建期和运行期生成内容不属于源码：`.vs`、`bin`、`obj`、`TestResults`、`artifacts`、前端 `node_modules/dist/*.tsbuildinfo`、扫描 `output`、用户 `profiles` 及 `ocr-debug` 均由 `.gitignore` 排除。
+构建期和运行期生成内容不属于源码：`.vs`、`bin`、`obj`、`TestResults`、`artifacts`、扫描 `output`、用户 `profiles` 及 `ocr-debug` 均由 `.gitignore` 排除。
 
 ## 6. 关键用例与时序
 
@@ -215,6 +229,8 @@ dotnet build .\PoeTradeAssistant.sln -c Release
 
 发布由 `scripts/publish-win-x64.ps1` 完成：恢复依赖、生成基于 .NET 10 的自包含 Windows 应用，输出到 `artifacts/publish/win-x64`，不再生成 ZIP。脚本先按 `global.json` 查找兼容 SDK（含 DOTNET_ROOT、PATH、用户及临时工具目录），失败时保留已有产物；清理前检查目标路径和运行中的发布程序。发布成功后以发布目录为工作目录自动启动应用，启动失败仅提示警告。当前保持多文件发布，以便可靠装载 WPF、OCR 模型和本机运行库。
 
+实时搜索回归覆盖环境 URL、链接存储、离线翻译及界面行为。可运行 `dotnet run --project ./tools/LiveSearch.Smoke -c Release`，以系统浏览器和本地模拟页面验证卡片、登录、去重、前往、暂停与退出。真实四区服登录、实时连接和游戏传送仍需人工验证。发布包含 win-x64 Playwright 驱动（隐藏的 .playwright 目录），不包含浏览器，分发需复制完整目录。
+
 ## 9. 质量属性与约束
 
 | 属性 | 当前设计 |
@@ -230,7 +246,7 @@ dotnet build .\PoeTradeAssistant.sln -c Release
 
 1. 统一命名：解决方案仍保留 `Poe2MarketScanner.*` 历史项目名，与最终产品名不一致。
 2. 拆分大型类：将扫描会话协调、profile 切换和计算器持久化/领域计算分别抽离。
-3. 明确旧 Web 生命周期：迁移完缺失功能后归档或删除 `web/calculator`，避免双实现漂移。
+3. 旧 Web 代码已移出当前源码树；符文、公式及完整三角套利尚未原生化，后续可从 Git 历史提取参考。
 4. 持续升级依赖：项目已迁移至 `.NET 10 LTS` 与 WPF UI；后续随安全补丁同步验证 PaddleOCR、OpenCV 与 Fluent 主题。
 5. 强化端到端测试：增加真实 WPF 交互、截图样本 OCR 回归和发布包启动冒烟测试。
 6. 合约兼容性：扫描输出已统一为 V2，后续持续验证四价字段、部分失败状态和旧 V1 导入兼容性。
@@ -238,7 +254,7 @@ dotnet build .\PoeTradeAssistant.sln -c Release
 
 ## 11. 设计决策记录摘要
 
-- 选择 WPF 原生宿主与 WPF UI Fluent 主题，消除 WebView2/浏览器运行时依赖并保留 Windows 自动化兼容性。
+- 选择 WPF 原生宿主与 WPF UI Fluent 主题，扫描器与计算器无需 WebView2；实时搜索复用系统 Chrome/Edge，通过 Playwright 驱动连接，保留 Windows 自动化兼容性。
 - 以 `rightPerLeft` 明确比例方向，避免中文展示文本带来的歧义。
 - 扫描只输出 V2；旧 V1 保留读取适配，不再生成兼容文件。
 - POE1/POE2 工作区物理隔离，切换时保存并加载各自状态。

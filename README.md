@@ -1,8 +1,8 @@
 # PoeTradeAssistant
 
-当前开发分支已接入“实时搜索 · 本地浏览器实例”，可一键启动并连接本机 Chrome/Edge，首次登录后保留登录状态。功能范围、运行步骤及验证边界见 [试用说明](docs/live-search-preview.md)。以下关于无浏览器依赖的描述仅适用于扫描器和原生计算器；监控模块仍会携带 Playwright 的 Windows 驱动。
+当前基准分支为 `main`，已整合截至 `aed0dc3` 的开发成果并接入“实时搜索 · 本地浏览器实例”，可一键启动并连接本机 Chrome/Edge，首次登录后保留登录状态。功能范围、运行步骤及验证边界见 [试用说明](docs/live-search-preview.md)。以下关于无浏览器依赖的描述仅适用于扫描器和原生计算器；监控模块仍会携带 Playwright 的 Windows 驱动。
 
-统一 POE 交易辅助项目的实施根目录。扫描器、计算器、测试与合并代码均位于本目录；原始两个项目保留为未改动的历史副本。
+统一 POE 交易辅助项目的实施根目录。扫描器、计算器、测试与合并代码均位于本目录。
 
 当前已实现：
 
@@ -11,7 +11,7 @@
 - `PoeTradeAssistant.ScannerIntegration.Tests`：比例方向、币种别名、状态保留与 V1 兼容回归测试。
 - 原生 WPF 套利计算器：币种金币成本、基础交易对、标的 ROI / 净利润 / 金币效率、V2 价格表导入与本地工作区保存；扫描完成后会自动导入当前批次。
 
-`PoeTradeAssistant.sln` 只引用本目录内的项目。扫描器源码位于 `src/Poe2MarketScanner.*`，计算器源码位于 `web/calculator`；现阶段保留原有项目名称，后续再统一重命名为 `PoeTradeAssistant.*`。
+`PoeTradeAssistant.sln` 只引用本目录内的项目。扫描器源码位于 `src/Poe2MarketScanner.*`，原生计算器源码位于 `src/Poe2MarketScanner.App/Services/NativeCalculatorWorkspace.cs`，实时搜索位于 `src/PoeTradeAssistant.LiveSearch`；现阶段保留原有项目名称，后续再统一重命名为 `PoeTradeAssistant.*`。
 
 统一宿主基于 .NET 10 LTS、WPF 与 WPF UI Fluent 主题，要求 Windows 10 19041 或更高版本。套利计算器完全使用原生控件和 C# 计算，不依赖 WebView2、浏览器运行时或网页资源。
 
@@ -36,4 +36,4 @@ dotnet build .\PoeTradeAssistant.sln -c Release
 
 脚本只生成自包含的 `artifacts\publish\win-x64\PoeTradeAssistant.exe` 及其运行依赖，不再生成 ZIP 文件。如需分发，请复制整个发布目录，不要只单独复制 EXE。该方式携带 WPF UI、OCR 模型与本机运行库，不需要网页资源或 Microsoft Edge WebView2 Runtime。
 
-旧的 `web/calculator` 目录只作为功能迁移参考，不会被编译、打包或在运行时加载；符文套利与公式套利将在后续原生页面中按相同的数据模型迁移。
+旧 Web 计算器、旧扫描器设计和合并预研已从当前源码树移除，可在 `aed0dc3` 及此前 Git 历史中查阅。符文、公式及完整三角套利尚未原生化。当前完整设计见 [SDD](docs/SDD.md)。

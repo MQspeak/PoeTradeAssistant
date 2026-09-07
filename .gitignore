@@ -6,11 +6,6 @@ TestResults/
 *.user
 *.suo
 
-# Front-end dependencies and generated output (legacy calculator reference)
-web/calculator/node_modules/
-web/calculator/dist/
-web/calculator/*.tsbuildinfo
-
 # Packaging and runtime caches
 artifacts/
 
