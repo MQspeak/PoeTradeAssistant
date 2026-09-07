@@ -181,6 +181,8 @@ public sealed class BrowserSession : IAsyncDisposable
         var enabled = links.Where(x => x.Enabled).ToArray();
         if (enabled.Length == 0) throw new InvalidOperationException("请至少启用一个监控链接。");
         await PauseAsync();
+        if (_loginPage is { IsClosed: false })
+            await HideBrowserAsync(_loginPage);
         foreach (var page in _pages.Values) if (!page.IsClosed) await page.CloseAsync();
         _pages.Clear();
         _stopped.Clear();
@@ -204,6 +206,7 @@ public sealed class BrowserSession : IAsyncDisposable
                     var page = await _context!.NewPageAsync();
                     _createdPages.Add(page);
                     _pages[link.Id] = page;
+                    await HideBrowserAsync(page);
                     if (token.IsCancellationRequested || _stopped.Contains(link.Id))
                     {
                         await page.CloseAsync();
@@ -213,6 +216,7 @@ public sealed class BrowserSession : IAsyncDisposable
                     Status?.Invoke($"正在连接：{link.Name}");
                     await page.GotoAsync(environment.ValidateUrl(link.Url), new() { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30000 });
                     await ActivateLiveAsync(page, token);
+                    await HideBrowserAsync(page);
                     token.ThrowIfCancellationRequested();
                     if (_stopped.Contains(link.Id)) continue;
                     var cards = await page.EvaluateAsync<JsonElement>(CardsScript);
